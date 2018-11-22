@@ -20,6 +20,7 @@ package com.theaigames.game.warlight2;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Random;
 import java.util.Scanner;
 
 import java.lang.Thread;
@@ -60,8 +61,17 @@ public class Warlight2 implements Logic
     private final long TIMEBANK_MAX = 10000l;
     private final long TIME_PER_MOVE = 500l;
 
+    private Random mapGenerationRnd = new Random();
+    private Random gameplayRnd = new Random();
 
-    public Warlight2(String gameID, String mapFile, String settingsFile) {
+    public Warlight2(String gameID, int randomMapSeed, int randomGameSeed, String mapFile, String settingsFile) {
+        if (randomMapSeed > 0) {
+            this.mapGenerationRnd.setSeed(randomMapSeed);
+        }
+        if (randomGameSeed > 0) {
+            this.gameplayRnd.setSeed(randomGameSeed);
+        }
+
         this.gameID = gameID;
         this.mapFile = mapFile;
         this.settingsFile = settingsFile;
@@ -96,12 +106,12 @@ public class Warlight2 implements Logic
 
         // get map string from database and setup the map
         initMap = MapCreator.createMap(getMapString());
-        map = MapCreator.setupMap(initMap, settings);
+        map = MapCreator.setupMap(initMap, settings, this.mapGenerationRnd);
         this.maxRounds = MapCreator.determineMaxRounds(map);
 
         // start the processor
         System.out.println("Starting game...");
-        this.processor = new Processor(map, settings, player1, player2);
+        this.processor = new Processor(map, settings, this.gameplayRnd, player1, player2);
 
         sendSettings(player1);
         sendSettings(player2);
@@ -276,16 +286,18 @@ public class Warlight2 implements Logic
      */
     public static void main(String args[]) throws Exception {
         String gameID = args[0];
-        String mapFile = args[1];
-        String settingsFile = args[2];
-        String bot1Cmd = args[3];
-        String bot2Cmd = args[4];
+        int randomMapSeed = Integer.parseInt(args[1]);
+        int randomGameSeed = Integer.parseInt(args[2]);
+        String mapFile = args[3];
+        String settingsFile = args[4];
+        String bot1Cmd = args[5];
+        String bot2Cmd = args[6];
 
         // Construct engine
         Engine engine = new Engine();
 
         // Set logic
-        engine.setLogic(new Warlight2(gameID, mapFile, settingsFile));
+        engine.setLogic(new Warlight2(gameID, randomMapSeed, randomGameSeed, mapFile, settingsFile));
 
         // Add players
         engine.addPlayer(bot1Cmd);

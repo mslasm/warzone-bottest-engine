@@ -19,6 +19,7 @@ package com.theaigames.game.warlight2;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.Random;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -92,7 +93,7 @@ public class MapCreator
      * @param initMap : the map object that hasn't been set up yet, i.e. no armies yet
      * @return : the fully initialized and setup Map object
      */
-    public static Map setupMap(Map initMap, Settings mapSettings) {
+    public static Map setupMap(Map initMap, Settings mapSettings, Random mapGenerationRnd) {
         Map map = initMap;
         for (Region region : map.regions) {
             region.setPlayerName("neutral");
@@ -101,7 +102,7 @@ public class MapCreator
 
         if (mapSettings.getNumberOfWastelands() > 0) {
             for (int i = 0; i < mapSettings.getNumberOfWastelands(); i++) {
-                double rand = Math.random();
+                double rand = mapGenerationRnd.nextDouble();
                 int index = (int) (rand * map.getRegions().size());
                 Region wastelandTarget = map.getRegions().get(index);
 

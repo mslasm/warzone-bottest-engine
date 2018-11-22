@@ -19,6 +19,7 @@ package com.theaigames.game.warlight2;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Random;
 
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.Settings;
@@ -42,6 +43,7 @@ public class Processor
     private Player player2;
     private Map map;
     private Settings settings;
+    private Random gameplayRnd;
     private Parser parser;
     private int roundNr;
     private LinkedList<MoveResult> pickedStartingRegions;
@@ -56,7 +58,7 @@ public class Processor
     private final double LUCK_MODIFIER = 0.16;
     private final int MINIMAL_STARTING_PICKS = 6;
 
-    public Processor(Map initMap, Settings settings, Player player1, Player player2) {
+    public Processor(Map initMap, Settings settings, Random gameplayRnd, Player player1, Player player2) {
         this.map = initMap;
         this.settings = settings;
         
@@ -101,7 +103,7 @@ public class Processor
 
             int nrOfRegions = nonWasteLandRegions.size();
             if (nrOfRegions > 0) {
-                double rand = Math.random();
+                double rand = gameplayRnd.nextDouble();
                 int index = (int) (rand * nrOfRegions);
                 Region randomRegion = nonWasteLandRegions.get(index);
                 pickableRegions.add(randomRegion);
@@ -135,7 +137,7 @@ public class Processor
             Region region = parser.parseStartingRegion(currentPlayer.requestStartingArmies(pickableRegions),
                     pickableRegions, currentPlayer);
             if (region == null) { // get random region
-                double rand = Math.random();
+                double rand = gameplayRnd.nextDouble();
                 int index = (int) (rand * pickableRegions.size());
                 region = pickableRegions.get(index);
             }
@@ -187,7 +189,7 @@ public class Processor
 
         int k = (actualPicks - MINIMAL_STARTING_PICKS) / 2;
         for (int i = 0; i < k; i++) {
-            double rand = Math.random();
+            double rand = gameplayRnd.nextDouble();
             if (rand < 0.25) { // 0.25 chance amount is decremented by 1 for each player
                 actualPicks -= 2;
             }
@@ -479,14 +481,14 @@ public class Processor
             for (int t = 1; t <= attackingArmies; t++) // calculate how much defending armies are destroyed with 100%
                                                       // luck
             {
-                double rand = Math.random();
+                double rand = gameplayRnd.nextDouble();
                 if (rand < 0.6) // 60% chance to destroy one defending army
                     defendersDestroyed++;
             }
             for (int t = 1; t <= defendingArmies; t++) // calculate how much attacking armies are destroyed with 100%
                                                       // luck
             {
-                double rand = Math.random();
+                double rand = gameplayRnd.nextDouble();
                 if (rand < 0.7) // 70% chance to destroy one attacking army
                     attackersDestroyed++;
             }
