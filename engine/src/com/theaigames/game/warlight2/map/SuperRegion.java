@@ -16,6 +16,7 @@
 //    file that was distributed with this source code.
 
 package com.theaigames.game.warlight2.map;
+
 import java.util.LinkedList;
 
 /**
@@ -24,73 +25,70 @@ import java.util.LinkedList;
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
-public class SuperRegion implements Comparable<SuperRegion> {
-	
-	private int id;
-	private int armiesReward;
-	private LinkedList<Region> subRegions;
-	
-	public SuperRegion(int id, int armiesReward)
-	{
-		this.id = id;
-		this.armiesReward = armiesReward;
-		subRegions = new LinkedList<Region>();
-	}
-	
-	/**
-	 * Adds a region to this superRegion
-	 * @param subRegion : region to be added
-	 */
-	public void addSubRegion(Region subRegion)
-	{
-		if(!subRegions.contains(subRegion))
-			subRegions.add(subRegion);
-	}
-	
-	/**
-	 * @return : A string with the name of the player that fully owns this SuperRegion
-	 */
-	public String ownedByPlayer()
-	{
-		String playerName = subRegions.getFirst().getPlayerName();
-		for(Region region : subRegions)
-		{
-			if (!playerName.equals(region.getPlayerName()))
-				return null;
-		}
-		return playerName;
-	}
-	
-	/**
-	 * @return : The id of this SuperRegion
-	 */
-	public int getId() {
-		return id;
-	}
-	
-	/**
-	 * @return : The number of armies a Player is rewarded when he fully owns this SuperRegion
-	 */
-	public int getArmiesReward() {
-		return armiesReward;
-	}
-	
-	/**
-	 * @return : A list with the Regions that are part of this SuperRegion
-	 */
-	public LinkedList<Region> getSubRegions() {
-		return subRegions;
-	}
-	
-	/**
-	 * Used for sorting superRegions by id
-	 */
-	@Override
-	public int compareTo(SuperRegion sr) {
-		if(this.id > sr.id) 
-			return 1;
-		if(this.id == sr.id)
-			return 0;
-		return -1;
-	}
+public class SuperRegion implements Comparable<SuperRegion>
+{
+    private int id;
+    private int armiesReward;
+    private LinkedList<Region> subRegions;
+
+    public SuperRegion(int id, int armiesReward) {
+        this.id = id;
+        this.armiesReward = armiesReward;
+        subRegions = new LinkedList<Region>();
+    }
+
+    /**
+     * Adds a region to this superRegion
+     * 
+     * @param subRegion : region to be added
+     */
+    public void addSubRegion(Region subRegion) {
+        if (!subRegions.contains(subRegion))
+            subRegions.add(subRegion);
+    }
+
+    /**
+     * @return : A string with the name of the player that fully owns this SuperRegion
+     */
+    public String ownedByPlayer() {
+        String playerName = subRegions.getFirst().getPlayerName();
+        for (Region region : subRegions) {
+            if (!playerName.equals(region.getPlayerName()))
+                return null;
+        }
+        return playerName;
+    }
+
+    /**
+     * @return : The id of this SuperRegion
+     */
+    public int getId() {
+        return id;
+    }
+
+    /**
+     * @return : The number of armies a Player is rewarded when he fully owns this SuperRegion
+     */
+    public int getArmiesReward() {
+        return armiesReward;
+    }
+
+    /**
+     * @return : A list with the Regions that are part of this SuperRegion
+     */
+    public LinkedList<Region> getSubRegions() {
+        return subRegions;
+    }
+
+    /**
+     * Used for sorting superRegions by id
+     */
+    @Override
+    public int compareTo(SuperRegion sr) {
+        if (this.id > sr.id)
+            return 1;
+        if (this.id == sr.id)
+            return 0;
+        return -1;
+    }
 }
