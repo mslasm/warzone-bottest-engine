@@ -26,6 +26,7 @@ import org.json.JSONObject;
 
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.Region;
+import com.theaigames.game.warlight2.map.Settings;
 import com.theaigames.game.warlight2.map.SuperRegion;
 
 /**
@@ -88,51 +89,31 @@ public class MapCreator
      * Sets up the map. Make every region neutral with 2 armies to start with. Adds wastelands (> 2 armies on a neutral) if
      * wastelandSize > 0.
      * 
-     * @param initMap       : the map object that hasn't been set up yet, i.e. no armies yet
-     * @param wastelandSize : the amount of armies that a wasteland contains
+     * @param initMap : the map object that hasn't been set up yet, i.e. no armies yet
      * @return : the fully initialized and setup Map object
      */
-    public static Map setupMap(Map initMap, int wastelandSize) {
+    public static Map setupMap(Map initMap, Settings mapSettings) {
         Map map = initMap;
         for (Region region : map.regions) {
             region.setPlayerName("neutral");
-            region.setArmies(2);
+            region.setArmies(mapSettings.getNeutralArmies());
         }
-        if (wastelandSize > 0) {
-            int nrOfWastelands = (int) (map.getSuperRegions().size() / 2); // amount of wastelands is half of the amount of superRegions
 
-            for (int i = 0; i < nrOfWastelands; i++) {
+        if (mapSettings.getNumberOfWastelands() > 0) {
+            for (int i = 0; i < mapSettings.getNumberOfWastelands(); i++) {
                 double rand = Math.random();
                 int index = (int) (rand * map.getRegions().size());
-                Region wasteland = map.getRegions().get(index);
+                Region wastelandTarget = map.getRegions().get(index);
 
-                if (wasteland.getArmies() > 2 && !roomForWasteland(wasteland.getSuperRegion())) {
+                if (wastelandTarget.getArmies() == mapSettings.getWastelandSize()) {
+                    // already a wasteland
                     i--;
                     continue;
                 }
-
-                wasteland.setArmies(wastelandSize);
+                wastelandTarget.setArmies(mapSettings.getWastelandSize());
             }
         }
         return map;
-    }
-
-    /**
-     * Checks if superRegion has at least two neutral non-wasteland regions
-     * 
-     * @param superRegion
-     * @return : true if another wasteland could be added to this superRegion
-     */
-    private static boolean roomForWasteland(SuperRegion superRegion) {
-        int count = 0;
-        for (Region region : superRegion.getSubRegions()) {
-            if (region.getArmies() == 2) {
-                count++;
-                if (count >= 2)
-                    return true;
-            }
-        }
-        return false;
     }
 
     /**

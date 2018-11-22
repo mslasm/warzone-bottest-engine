@@ -35,6 +35,7 @@ import com.theaigames.game.warlight2.move.AttackTransferMove;
 import com.theaigames.game.warlight2.move.MoveResult;
 import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 import com.theaigames.game.warlight2.map.Map;
+import com.theaigames.game.warlight2.map.Settings;
 
 /**
  * Warlight2 class
@@ -46,24 +47,27 @@ import com.theaigames.game.warlight2.map.Map;
 
 public class Warlight2 implements Logic
 {
+    private String gameID;
+
     private String playerName1, playerName2;
     private final String mapFile;
+    private final String settingsFile;
 
     private Processor processor;
     private Player player1, player2;
     private int maxRounds;
 
-    private String secretKey, accessKey;
-
-    private final int STARTING_ARMIES = 5;
     private final long TIMEBANK_MAX = 10000l;
     private final long TIME_PER_MOVE = 500l;
-    private final int SIZE_WASTELANDS = 6; // size of wastelands, <= 0 for no wastelands
 
-    public Warlight2(String mapFile) {
+
+    public Warlight2(String gameID, String mapFile, String settingsFile) {
+        this.gameID = gameID;
         this.mapFile = mapFile;
-        this.playerName1 = "player1";
-        this.playerName2 = "player2";
+        this.settingsFile = settingsFile;
+
+        this.playerName1 = "bot1";
+        this.playerName2 = "bot2";
     }
 
     /**
@@ -74,6 +78,7 @@ public class Warlight2 implements Logic
     @Override
     public void setupGame(ArrayList<IOPlayer> players) throws IncorrectPlayerCountException, IOException {
 
+        Settings settings;
         Map initMap, map;
 
         System.out.println("setting up game");
@@ -83,17 +88,20 @@ public class Warlight2 implements Logic
             throw new IncorrectPlayerCountException("Should be two players");
         }
 
-        this.player1 = new Player(playerName1, players.get(0), STARTING_ARMIES, TIMEBANK_MAX, TIME_PER_MOVE);
-        this.player2 = new Player(playerName2, players.get(1), STARTING_ARMIES, TIMEBANK_MAX, TIME_PER_MOVE);
+        this.player1 = new Player(playerName1, players.get(0), TIMEBANK_MAX, TIME_PER_MOVE);
+        this.player2 = new Player(playerName2, players.get(1), TIMEBANK_MAX, TIME_PER_MOVE);
+
+        // TODO: use SettingsReader to read settings from the provided file
+        settings = new Settings();
 
         // get map string from database and setup the map
         initMap = MapCreator.createMap(getMapString());
-        map = MapCreator.setupMap(initMap, SIZE_WASTELANDS);
+        map = MapCreator.setupMap(initMap, settings);
         this.maxRounds = MapCreator.determineMaxRounds(map);
 
         // start the processor
         System.out.println("Starting game...");
-        this.processor = new Processor(map, player1, player2);
+        this.processor = new Processor(map, settings, player1, player2);
 
         sendSettings(player1);
         sendSettings(player2);
@@ -262,20 +270,22 @@ public class Warlight2 implements Logic
     /**
      * main
      * 
-     * @param args : the map file should be given, along with the commands that
-     *             start the bot processes
+     * @param args : game id, the map file and the settings file, along with the commands that
+     *               start the bot processes
      * @throws Exception
      */
     public static void main(String args[]) throws Exception {
-        String mapFile = args[0];
-        String bot1Cmd = args[1];
-        String bot2Cmd = args[2];
+        String gameID = args[0];
+        String mapFile = args[1];
+        String settingsFile = args[2];
+        String bot1Cmd = args[3];
+        String bot2Cmd = args[4];
 
         // Construct engine
         Engine engine = new Engine();
 
         // Set logic
-        engine.setLogic(new Warlight2(mapFile));
+        engine.setLogic(new Warlight2(gameID, mapFile, settingsFile));
 
         // Add players
         engine.addPlayer(bot1Cmd);

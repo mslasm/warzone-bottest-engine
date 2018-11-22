@@ -36,19 +36,18 @@ public class Player
 {
     private String name;
     private IOPlayer bot;
-    private int armiesPerTurn;
     private int armiesLeft;    //variable armies that can be added, changes with superRegions fully owned and moves already placed.
     private long timeBank;
     private long maxTimeBank;
     private long timePerMove;
 
-    public Player(String name, IOPlayer bot, int startingArmies, long maxTimeBank, long timePerMove) {
+    public Player(String name, IOPlayer bot, long maxTimeBank, long timePerMove) {
         this.name = name;
         this.bot = bot;
-        this.armiesPerTurn = startingArmies; //start with 5 armies per turn
         this.timeBank = maxTimeBank;
         this.maxTimeBank = maxTimeBank;
         this.timePerMove = timePerMove;
+        this.armiesLeft = 0;
     }
 
     /**
@@ -77,13 +76,6 @@ public class Player
      */
     public IOPlayer getBot() {
         return bot;
-    }
-
-    /**
-     * @return The standard number of armies this Player gets each turn to place on the map
-     */
-    public int getArmiesPerTurn() {
-        return armiesPerTurn;
     }
 
     /**

@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 
 import com.theaigames.game.warlight2.map.Map;
+import com.theaigames.game.warlight2.map.Settings;
 import com.theaigames.game.warlight2.map.Region;
 import com.theaigames.game.warlight2.map.SuperRegion;
 import com.theaigames.game.warlight2.move.AttackTransferMove;
@@ -37,10 +38,10 @@ import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 
 public class Processor
 {
-
     private Player player1;
     private Player player2;
     private Map map;
+    private Settings settings;
     private Parser parser;
     private int roundNr;
     private LinkedList<MoveResult> pickedStartingRegions;
@@ -55,8 +56,10 @@ public class Processor
     private final double LUCK_MODIFIER = 0.16;
     private final int MINIMAL_STARTING_PICKS = 6;
 
-    public Processor(Map initMap, Player player1, Player player2) {
+    public Processor(Map initMap, Settings settings, Player player1, Player player2) {
         this.map = initMap;
+        this.settings = settings;
+        
         this.player1 = player1;
         this.player2 = player2;
         moveQueue = new MoveQueue(player1, player2);
@@ -539,8 +542,8 @@ public class Processor
      * Calculates how many armies each player is able to place on the map for the next round
      */
     public void recalculateStartingArmies() {
-        player1.setArmiesLeft(player1.getArmiesPerTurn());
-        player2.setArmiesLeft(player2.getArmiesPerTurn());
+        player1.setArmiesLeft(settings.getBaseArmiesPerTurn());
+        player2.setArmiesLeft(settings.getBaseArmiesPerTurn());
 
         for (SuperRegion superRegion : map.getSuperRegions()) {
             Player player = getPlayer(superRegion.ownedByPlayer());
