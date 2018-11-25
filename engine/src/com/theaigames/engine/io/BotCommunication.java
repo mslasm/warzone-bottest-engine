@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -21,14 +21,14 @@ import java.io.IOException;
 
 /**
  * Bot Communication interface
- * 
+ *
  * Handles callback between players and the engine.
- * 
+ *
  * @author Jackie Xu <jackie@starapple.nl>, Jim van Eeden <jim@starapple.nl>
  */
 public interface BotCommunication {
-    
-    public void addPlayer(String command) throws IOException;
-    
+
+    public void addPlayer(String command, String playerName) throws IOException;
+
     public void start() throws Exception;
 }

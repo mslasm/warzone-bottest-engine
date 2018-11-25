@@ -64,7 +64,8 @@ public class Warlight2 implements Logic
     private Random mapGenerationRnd = new Random();
     private Random gameplayRnd = new Random();
 
-    public Warlight2(String gameID, int randomMapSeed, int randomGameSeed, String mapFile, String settingsFile) {
+    public Warlight2(String gameID, int randomMapSeed, int randomGameSeed, String mapFile, String settingsFile,
+            String playerName1, String playerName2) {
         if (randomMapSeed > 0) {
             this.mapGenerationRnd.setSeed(randomMapSeed);
         }
@@ -76,8 +77,8 @@ public class Warlight2 implements Logic
         this.mapFile = mapFile;
         this.settingsFile = settingsFile;
 
-        this.playerName1 = "bot1";
-        this.playerName2 = "bot2";
+        this.playerName1 = playerName1;
+        this.playerName2 = playerName2;
     }
 
     /**
@@ -293,15 +294,18 @@ public class Warlight2 implements Logic
         String bot1Cmd = args[5];
         String bot2Cmd = args[6];
 
+        String bot1Name = "player1";
+        String bot2Name = "player2";
+
         // Construct engine
         Engine engine = new Engine();
 
         // Set logic
-        engine.setLogic(new Warlight2(gameID, randomMapSeed, randomGameSeed, mapFile, settingsFile));
+        engine.setLogic(new Warlight2(gameID, randomMapSeed, randomGameSeed, mapFile, settingsFile, bot1Name, bot2Name));
 
         // Add players
-        engine.addPlayer(bot1Cmd);
-        engine.addPlayer(bot2Cmd);
+        engine.addPlayer(bot1Cmd, bot1Name);
+        engine.addPlayer(bot2Cmd, bot2Name);
 
         engine.start();
     }
