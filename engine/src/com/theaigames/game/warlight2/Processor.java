@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -33,7 +33,7 @@ import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 
 /**
  * Processor class
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
@@ -44,6 +44,7 @@ public class Processor
     private Map map;
     private Settings settings;
     private Random gameplayRnd;
+    private Random mapGenerationRnd;
     private Parser parser;
     private int roundNr;
     private LinkedList<MoveResult> pickedStartingRegions;
@@ -55,13 +56,13 @@ public class Processor
     private MoveQueue moveQueue;
     private String pickableStartingRegionsString;
 
-    private final double LUCK_MODIFIER = 0.16;
-    private final int MINIMAL_STARTING_PICKS = 6;
-
-    public Processor(Map initMap, Settings settings, Random gameplayRnd, Player player1, Player player2) {
+    public Processor(Map initMap, Settings settings, Random gameplayRnd, Random mapGenerationRnd,
+            Player player1, Player player2) {
         this.map = initMap;
         this.settings = settings;
-        
+        this.gameplayRnd = gameplayRnd;
+        this.mapGenerationRnd = mapGenerationRnd;
+
         this.player1 = player1;
         this.player2 = player2;
         moveQueue = new MoveQueue(player1, player2);
@@ -103,7 +104,7 @@ public class Processor
 
             int nrOfRegions = nonWasteLandRegions.size();
             if (nrOfRegions > 0) {
-                double rand = gameplayRnd.nextDouble();
+                double rand = mapGenerationRnd.nextDouble();
                 int index = (int) (rand * nrOfRegions);
                 Region randomRegion = nonWasteLandRegions.get(index);
                 pickableRegions.add(randomRegion);
@@ -119,8 +120,8 @@ public class Processor
 
         sendStartingRegionsInfO(player1, pickableRegions, true);
         sendStartingRegionsInfO(player2, pickableRegions, true);
-        sendStartingRegionPickAmount(player1, nrOfPicks / 2);
-        sendStartingRegionPickAmount(player2, nrOfPicks / 2);
+        sendStartingRegionPickAmount(player1, settings.getNumberOfStartingTerritories());
+        sendStartingRegionPickAmount(player2, settings.getNumberOfStartingTerritories());
 
         while (i < nrOfPicks) {
             if (i % 4 <= 1) {
@@ -137,7 +138,7 @@ public class Processor
             Region region = parser.parseStartingRegion(currentPlayer.requestStartingArmies(pickableRegions),
                     pickableRegions, currentPlayer);
             if (region == null) { // get random region
-                double rand = gameplayRnd.nextDouble();
+                double rand = mapGenerationRnd.nextDouble();
                 int index = (int) (rand * pickableRegions.size());
                 region = pickableRegions.get(index);
             }
@@ -174,7 +175,7 @@ public class Processor
     /**
      * Get the amount of picks that the two players can make from the avaiable starting regions minimum of 3 picks each (= 6
      * total)
-     * 
+     *
      * @param availablePicks : total picks available
      * @return : less than total picks
      */
@@ -184,12 +185,12 @@ public class Processor
         if (actualPicks % 2 != 0)
             actualPicks--;
 
-        if (actualPicks <= MINIMAL_STARTING_PICKS)
+        if (actualPicks <= settings.getBaseArmiesPerTurn()*2)  // FIXME: strange logic
             return actualPicks;
 
-        int k = (actualPicks - MINIMAL_STARTING_PICKS) / 2;
+        int k = (actualPicks - settings.getBaseArmiesPerTurn()*2) / 2;
         for (int i = 0; i < k; i++) {
-            double rand = gameplayRnd.nextDouble();
+            double rand = mapGenerationRnd.nextDouble();
             if (rand < 0.25) { // 0.25 chance amount is decremented by 1 for each player
                 actualPicks -= 2;
             }
@@ -200,7 +201,7 @@ public class Processor
 
     /**
      * Plays one round of the game
-     * 
+     *
      * @param roundNumber
      */
     public void playRound(int roundNumber) {
@@ -227,7 +228,7 @@ public class Processor
 
     /**
      * Queues the moves given by the player
-     * 
+     *
      * @param movesInput : bot's output
      * @param player     : player who the output belongs to
      */
@@ -249,7 +250,7 @@ public class Processor
 
     /**
      * Queues the placeArmies moves given by the player Checks if the moves are legal
-     * 
+     *
      * @param plm : placeArmiesMove to be queued
      */
     private void queuePlaceArmies(PlaceArmiesMove plm) {
@@ -283,7 +284,7 @@ public class Processor
 
     /**
      * Queues the attackTransfer moves given by the player Does the first checks for legality
-     * 
+     *
      * @param atm : attackTransferMove to be queued
      */
     private void queueAttackTransfer(AttackTransferMove atm) {
@@ -459,7 +460,7 @@ public class Processor
 
     /**
      * Processes the result of an attack see wiki.warlight.net/index.php/Combat_Basics
-     * 
+     *
      * @param move : attackTransfer move
      * @return : amount of defenders destroyed, used for correcting coming moves
      */
@@ -478,27 +479,9 @@ public class Processor
             else
                 attackingArmies = fromRegion.getArmies() - 1;
 
-            for (int t = 1; t <= attackingArmies; t++) // calculate how much defending armies are destroyed with 100%
-                                                      // luck
-            {
-                double rand = gameplayRnd.nextDouble();
-                if (rand < 0.6) // 60% chance to destroy one defending army
-                    defendersDestroyed++;
-            }
-            for (int t = 1; t <= defendingArmies; t++) // calculate how much attacking armies are destroyed with 100%
-                                                      // luck
-            {
-                double rand = gameplayRnd.nextDouble();
-                if (rand < 0.7) // 70% chance to destroy one attacking army
-                    attackersDestroyed++;
-            }
-
-            // apply luck modifier to get actual amount of destroyed armies
-            // straight round method is used (instead of weighted random round)
-            defendersDestroyed = (int) Math
-                    .round(((attackingArmies * 0.6) * (1 - LUCK_MODIFIER)) + (defendersDestroyed * LUCK_MODIFIER));
-            attackersDestroyed = (int) Math
-                    .round(((defendingArmies * 0.7) * (1 - LUCK_MODIFIER)) + (attackersDestroyed * LUCK_MODIFIER));
+            Battle battle = new Battle(attackingArmies, defendingArmies, this.gameplayRnd, this.settings);
+            attackersDestroyed = battle.getDestroyedAttackers();
+            defendersDestroyed = battle.getDestroyedDefenders();
 
             if (attackersDestroyed >= attackingArmies) {
                 if (defendersDestroyed >= defendingArmies)
@@ -570,7 +553,7 @@ public class Processor
 
     /**
      * Sends the list of available starting regions to pick from or the list of regions the opponent has picked
-     * 
+     *
      * @param player             : player to send info to
      * @param regions            : list of regions
      * @param beforeDistribution : true if we are still in the process of picking armies
@@ -592,7 +575,7 @@ public class Processor
 
     /**
      * Informs the player about how many regions he can pick from the list of starting regions
-     * 
+     *
      * @param player : player to send info to
      * @param amount : the amount of armies the player can pick
      */
@@ -605,7 +588,7 @@ public class Processor
 
     /**
      * Informs the player about how much armies he can place at the start next round
-     * 
+     *
      * @param player : player to send the info to
      */
     private void sendStartingArmiesInfo(Player player) {
@@ -619,7 +602,7 @@ public class Processor
 
     /**
      * Informs the player about how his visible map looks now
-     * 
+     *
      * @param player : player to send the info to
      */
     private void sendUpdateMapInfo(Player player) {
@@ -637,7 +620,7 @@ public class Processor
 
     /**
      * Informs the player about all his opponents' moves
-     * 
+     *
      * @param player : player to send the info to
      */
     private void sendOpponentMovesInfo(Player player) {

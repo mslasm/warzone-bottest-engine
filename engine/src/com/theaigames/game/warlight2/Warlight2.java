@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -24,9 +24,6 @@ import java.util.Random;
 import java.util.Scanner;
 
 import java.lang.Thread;
-import java.util.zip.*;
-import java.util.Properties;
-import java.net.URL;
 
 import com.theaigames.engine.Engine;
 import com.theaigames.engine.Logic;
@@ -38,17 +35,22 @@ import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.Settings;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 /**
  * Warlight2 class
- * 
+ *
  * Main class for Warlight2
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
 public class Warlight2 implements Logic
 {
     private String gameID;
+
+    private Settings settings;
 
     private String playerName1, playerName2;
     private final String mapFile;
@@ -58,18 +60,17 @@ public class Warlight2 implements Logic
     private Player player1, player2;
     private int maxRounds;
 
-    private final long TIMEBANK_MAX = 10000l;
-    private final long TIME_PER_MOVE = 500l;
-
     private Random mapGenerationRnd = new Random();
     private Random gameplayRnd = new Random();
 
     public Warlight2(String gameID, int randomMapSeed, int randomGameSeed, String mapFile, String settingsFile,
             String playerName1, String playerName2) {
         if (randomMapSeed > 0) {
+            System.out.format("Using wasteland generation/available regions seed: %d\n", randomMapSeed);
             this.mapGenerationRnd.setSeed(randomMapSeed);
         }
         if (randomGameSeed > 0) {
+            System.out.format("Using turn order/battle seed: %d\n", randomGameSeed);
             this.gameplayRnd.setSeed(randomGameSeed);
         }
 
@@ -83,15 +84,13 @@ public class Warlight2 implements Logic
 
     /**
      * sets up everything that's needed before a round can be played
-     * 
+     *
      * @param players : list of bots that have already been initialized
      */
     @Override
-    public void setupGame(ArrayList<IOPlayer> players) throws IncorrectPlayerCountException, IOException {
-
-        Settings settings;
-        Map initMap, map;
-
+    public void setupGame(ArrayList<IOPlayer> players)
+            throws IncorrectPlayerCountException, IOException, JSONException
+    {
         System.out.println("setting up game");
 
         // Determine array size is two players
@@ -99,28 +98,29 @@ public class Warlight2 implements Logic
             throw new IncorrectPlayerCountException("Should be two players");
         }
 
-        this.player1 = new Player(playerName1, players.get(0), TIMEBANK_MAX, TIME_PER_MOVE);
-        this.player2 = new Player(playerName2, players.get(1), TIMEBANK_MAX, TIME_PER_MOVE);
+        if (new File(this.settingsFile).isFile()) {
+            // file exists: read setting form file
+            this.settings = new Settings(getJSONFromFile(this.settingsFile));
+        } else {
+            this.settings = new Settings();
+        }
 
-        // TODO: use SettingsReader to read settings from the provided file
-        settings = new Settings();
+        this.player1 = new Player(playerName1, players.get(0), this.settings);
+        this.player2 = new Player(playerName2, players.get(1), this.settings);
 
         // get map string from database and setup the map
-        initMap = MapCreator.createMap(getMapString());
-        map = MapCreator.setupMap(initMap, settings, this.mapGenerationRnd);
+        Map initMap = MapCreator.createMap(getRAWFileContents(this.mapFile));
+        Map map     = MapCreator.setupMap(initMap, this.settings, this.mapGenerationRnd);
         this.maxRounds = MapCreator.determineMaxRounds(map);
 
         // start the processor
         System.out.println("Starting game...");
-        this.processor = new Processor(map, settings, this.gameplayRnd, player1, player2);
+        this.processor = new Processor(map, this.settings, this.gameplayRnd, this.mapGenerationRnd, player1, player2);
 
         sendSettings(player1);
         sendSettings(player2);
         MapCreator.sendSetupMapInfo(player1, map);
         MapCreator.sendSetupMapInfo(player2, map);
-
-        player1.setTimeBank(TIMEBANK_MAX);
-        player2.setTimeBank(TIMEBANK_MAX);
 
         this.processor.distributeStartingRegions(); // decide the player's starting regions
         this.processor.recalculateStartingArmies(); // calculate how much armies the players get at the start of the
@@ -130,7 +130,7 @@ public class Warlight2 implements Logic
 
     /**
      * play one round of the game
-     * 
+     *
      * @param roundNumber : round number
      */
     @Override
@@ -154,12 +154,12 @@ public class Warlight2 implements Logic
 
     /**
      * Sends all game settings to given player
-     * 
+     *
      * @param player : player to send settings to
      */
     private void sendSettings(Player player) {
-        player.sendInfo("settings timebank " + TIMEBANK_MAX);
-        player.sendInfo("settings time_per_move " + TIME_PER_MOVE);
+        player.sendInfo("settings timebank " + settings.getMaxTimebank());
+        player.sendInfo("settings time_per_move " + settings.getExtraTimePerMove());
         player.sendInfo("settings max_rounds " + this.maxRounds);
         player.sendInfo("settings your_bot " + player.getName());
 
@@ -170,13 +170,13 @@ public class Warlight2 implements Logic
     }
 
     /**
-     * Reads the string from the map file
-     * 
+     * Reads the contents of a given file into a string
+     *
      * @return : string representation of the map
      * @throws IOException
      */
-    private String getMapString() throws IOException {
-        File file = new File(this.mapFile);
+    private String getRAWFileContents(String fileName) throws IOException {
+        File file = new File(fileName);
         StringBuilder fileContents = new StringBuilder((int) file.length());
         Scanner scanner = new Scanner(file);
         String lineSeparator = System.getProperty("line.separator");
@@ -189,6 +189,12 @@ public class Warlight2 implements Logic
         } finally {
             scanner.close();
         }
+    }
+
+    private JSONObject getJSONFromFile(String fileName) throws IOException, JSONException {
+        String fileContents = this.getRAWFileContents(fileName);
+        JSONObject result = new JSONObject(fileContents);
+        return result;
     }
 
     /**
@@ -215,7 +221,7 @@ public class Warlight2 implements Logic
     /**
      * Turns the game that is stored in the processor to a nice string for the
      * visualization
-     * 
+     *
      * @param winner   : winner
      * @param gameView : type of view
      * @return : string that the visualizer can read
@@ -280,7 +286,7 @@ public class Warlight2 implements Logic
 
     /**
      * main
-     * 
+     *
      * @param args : game id, the map file and the settings file, along with the commands that
      *               start the bot processes
      * @throws Exception

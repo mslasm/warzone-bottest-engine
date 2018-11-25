@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -22,13 +22,14 @@ import java.util.ArrayList;
 
 import com.theaigames.engine.io.IOPlayer;
 import com.theaigames.game.warlight2.map.Region;
+import com.theaigames.game.warlight2.map.Settings;
 
 /**
  * Player class
- * 
+ *
  * This class stores all the information about the player and handles
  * communication between bot and engine.
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
@@ -38,16 +39,14 @@ public class Player
     private IOPlayer bot;
     private int armiesLeft;    //variable armies that can be added, changes with superRegions fully owned and moves already placed.
     private long timeBank;
-    private long maxTimeBank;
-    private long timePerMove;
+    private Settings settings;
 
-    public Player(String name, IOPlayer bot, long maxTimeBank, long timePerMove) {
+    public Player(String name, IOPlayer bot, Settings settings) {
         this.name = name;
         this.bot = bot;
-        this.timeBank = maxTimeBank;
-        this.maxTimeBank = maxTimeBank;
-        this.timePerMove = timePerMove;
+        this.timeBank = settings.getInitialTimebank();
         this.armiesLeft = 0;
+        this.settings = settings;
     }
 
     /**
@@ -94,17 +93,17 @@ public class Player
 
     /**
      * updates the time bank for this player, cannot get bigger than maximal time bank or smaller than zero
-     * 
+     *
      * @param time : time consumed from the time bank
      */
     public void updateTimeBank(long time) {
         this.timeBank = Math.max(this.timeBank - time, 0);
-        this.timeBank = Math.min(this.timeBank + this.timePerMove, this.maxTimeBank);
+        this.timeBank = Math.min(this.timeBank + settings.getExtraTimePerMove(), settings.getMaxTimebank());
     }
 
     /**
      * Sends given string to bot
-     * 
+     *
      * @param info
      */
     public void sendInfo(String info) {
@@ -117,7 +116,7 @@ public class Player
 
     /**
      * Asks the bot for his starting region pick and returns the answer
-     * 
+     *
      * @param pickableRegions : regions the bot can pick from
      * @return : the bot's output
      */
@@ -144,7 +143,7 @@ public class Player
 
     /**
      * Asks the bot for his placeArmiesMoves and returns the answer
-     * 
+     *
      * @return : the bot's output
      */
     public String requestPlaceArmiesMoves() {
@@ -153,7 +152,7 @@ public class Player
 
     /**
      * Asks the bot for this attackTransferMoves and returns the answer
-     * 
+     *
      * @return : the bot's output
      */
     public String requestAttackTransferMoves() {
@@ -162,7 +161,7 @@ public class Player
 
     /**
      * Asks the bot for given move type and returns the answer
-     * 
+     *
      * @param moveType : attackTransfer move of placeArmies move
      * @return : the bot's output
      */
