@@ -17,11 +17,17 @@
 
 package com.theaigames.game.warlight2;
 
-import java.util.ArrayList;
 import java.util.LinkedList;
+import java.util.Collection;
+import java.util.Set;
+import java.util.List;
+import java.util.Iterator;
+import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Random;
 
 import com.theaigames.game.warlight2.map.Map;
+import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
 import com.theaigames.game.warlight2.map.Region;
 import com.theaigames.game.warlight2.map.SuperRegion;
@@ -38,18 +44,31 @@ import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 
 public class Processor
 {
+    // TODO: replace with Map<String, Player>
     private Player player1;
     private Player player2;
+
     private Map map;
     private Settings settings;
     private Random gameplayRnd;
     private Random mapGenerationRnd;
-    private Parser parser;
+
+    private BotCommunication communication;
+
+    private int maxRounds;
     private int roundNr;
+
     private LinkedList<Move> opponentMovesPlayer1;
     private LinkedList<Move> opponentMovesPlayer2;
+
     private MoveQueue moveQueue;
-    private String pickableStartingRegionsString;
+
+    private Set<Integer> wastelands;
+    private Set<Integer> pickableStartingRegions;
+
+    private HashMap<Player, List<Integer>> playerPickedRegions;
+    private HashMap<Player, Set<Integer>> playerStartingRegions;
+    private Player firstPickPlayer;
 
     public Processor(Map initMap, Settings settings, Random gameplayRnd, Random mapGenerationRnd,
             Player player1, Player player2) {
@@ -58,119 +77,231 @@ public class Processor
         this.gameplayRnd = gameplayRnd;
         this.mapGenerationRnd = mapGenerationRnd;
 
+        this.maxRounds = settings.getMaxRounds(map.getRegions().size());
+
+        // setup troops for neutral players according to game settings
+        setupNeutrals(this.map);
+
+        // setup watelands
+        this.wastelands = setupWastelands(this.map);
+
+        // select pickable starting regions
+        this.pickableStartingRegions = distributeStartingRegions(this.map, this.wastelands);
+
         this.player1 = player1;
         this.player2 = player2;
         moveQueue = new MoveQueue(player1, player2);
 
-        parser = new Parser(map);
+        this.playerPickedRegions = new HashMap<>();
+        this.playerStartingRegions = new HashMap<>();
+
+        this.communication = new BotCommunicationV1(settings);
 
         opponentMovesPlayer1 = new LinkedList<Move>();
         opponentMovesPlayer2 = new LinkedList<Move>();
-        pickableStartingRegionsString = "";
     }
 
     /**
-     * asks in a ABBAAB fashion where the players would like to start, each superRegion could get one random region that can
-     * be picked, but some randomness decides if it will be less than that
+     * Make every region neutral with the number of armies defined in the settings.
      */
-    public void distributeStartingRegions() {
-        ArrayList<Region> pickableRegions = new ArrayList<Region>();
-        ArrayList<Region> player1Regions = new ArrayList<Region>();
-        ArrayList<Region> player2Regions = new ArrayList<Region>();
-
-        // get one random region from each superRegion
-        for (SuperRegion superRegion : map.getSuperRegions()) {
-            // wastelands can't be picked
-            LinkedList<Region> nonWasteLandRegions = new LinkedList<Region>();
-            for (Region region : superRegion.getSubRegions()) {
-                if (region.getArmies() == 2)
-                    nonWasteLandRegions.add(region);
-            }
-
-            int nrOfRegions = nonWasteLandRegions.size();
-            if (nrOfRegions > 0) {
-                double rand = mapGenerationRnd.nextDouble();
-                int index = (int) (rand * nrOfRegions);
-                Region randomRegion = nonWasteLandRegions.get(index);
-                pickableRegions.add(randomRegion);
-                pickableStartingRegionsString += randomRegion.getId() + " ";
-            }
+    private void setupNeutrals(Map map) {
+        for (Region region : map.getRegions()) {
+            region.setArmies(settings.getNeutralArmies());
+            region.setPlayerName(Region.OWNER_NEUTRAL);
         }
-
-        int superRegionAmount = pickableRegions.size();
-        int nrOfPicks = getAmountOfStartingPicks(superRegionAmount);
-        int i = 0;
-        int k;
-        Player currentPlayer;
-
-        sendStartingRegionsInfO(player1, pickableRegions, true);
-        sendStartingRegionsInfO(player2, pickableRegions, true);
-        sendStartingRegionPickAmount(player1, settings.getNumberOfStartingTerritories());
-        sendStartingRegionPickAmount(player2, settings.getNumberOfStartingTerritories());
-
-        while (i < nrOfPicks) {
-            if (i % 4 <= 1) {
-                k = 0;
-            } else {
-                k = 1;
-            }
-            if (i % 2 == k) {
-                currentPlayer = player1;
-            } else {
-                currentPlayer = player2;
-            }
-
-            Region region = parser.parseStartingRegion(currentPlayer.requestStartingArmies(pickableRegions),
-                    pickableRegions, currentPlayer);
-            if (region == null) { // get random region
-                double rand = mapGenerationRnd.nextDouble();
-                int index = (int) (rand * pickableRegions.size());
-                region = pickableRegions.get(index);
-            }
-
-            if (currentPlayer == player1)
-                player1Regions.add(region);
-            else
-                player2Regions.add(region);
-
-            region.setPlayerName(currentPlayer.getName());
-
-            // storing the picking phase for output
-            PlaceArmiesMove pickMove = new PlaceArmiesMove(currentPlayer.getName(), region, 2);
-
-            pickableRegions.remove(region);
-            i++;
-        }
-
-        sendStartingRegionsInfO(player1, player2Regions, false);
-        sendStartingRegionsInfO(player2, player1Regions, false);
     }
 
     /**
-     * Get the amount of picks that the two players can make from the avaiable starting regions minimum of 3 picks each (= 6
-     * total)
+     * Distributs wastelands according to the settings.
      *
-     * @param availablePicks : total picks available
-     * @return : less than total picks
+     * @param map : the map which will be used to distribute wastelands
+     * @return : the set of wastelands, so that they are excluded from the list of pickable regions
+     *           (note: wasteland size may be the same as default neutral size, so size itself
+     *                  can not be used to distinguish a wasteland from a neutral)
      */
-    private int getAmountOfStartingPicks(int availablePicks) {
-        int actualPicks = availablePicks;
+    private Set<Integer> setupWastelands(Map map) {
+        Set<Integer> wastelands = new HashSet<>();
 
-        if (actualPicks % 2 != 0)
-            actualPicks--;
-
-        if (actualPicks <= settings.getBaseArmiesPerTurn()*2)  // FIXME: strange logic
-            return actualPicks;
-
-        int k = (actualPicks - settings.getBaseArmiesPerTurn()*2) / 2;
-        for (int i = 0; i < k; i++) {
-            double rand = mapGenerationRnd.nextDouble();
-            if (rand < 0.25) { // 0.25 chance amount is decremented by 1 for each player
-                actualPicks -= 2;
+        if (settings.getNumberOfWastelands() > 0) {
+            // number of wastlands is at most the number of regions minus the number of players
+            int numWastelands = settings.getNumberOfWastelands() < map.getRegions().size()
+                    ? settings.getNumberOfWastelands()
+                    : map.getRegions().size() - this.getNumPlayers();
+            for (int i = 0; i < numWastelands; i++) {
+                Region wastelandTarget = getRandomObjectFromCollection(map.getRegions(), mapGenerationRnd);
+                if (wastelands.contains(wastelandTarget.getId())) {
+                    // already a wasteland
+                    i--;
+                    continue;
+                }
+                wastelandTarget.setArmies(settings.getWastelandSize());
+                wastelands.add(wastelandTarget.getId());
             }
         }
+        return wastelands;
+    }
 
-        return actualPicks;
+    public Set<Integer> distributeStartingRegions(Map map, Set<Integer> wastelands) {
+        Set<Integer> pickableRegions = new HashSet<>();
+
+        switch(settings.getDistributionMode()) {
+        case RANDOM_WARLORD:
+            // get one random region from each superRegion (or none if the one selected is a wasteland)
+            for (SuperRegion superRegion : map.getSuperRegions()) {
+                int regionID = getRandomObjectFromCollection(superRegion.getSubRegions(), mapGenerationRnd);
+                if (!wastelands.contains(regionID)) {
+                    pickableRegions.add(regionID);
+                }
+            }
+            break;
+        case RANDOM_CITIES:
+            // get all regions except one (and all wastelands) from each superRegion
+            for (SuperRegion superRegion : map.getSuperRegions()) {
+                int excludeRegionID = getRandomObjectFromCollection(superRegion.getSubRegions(), mapGenerationRnd);
+                for (Integer regionID : superRegion.getSubRegions()) {
+                    if (!wastelands.contains(regionID) && excludeRegionID != regionID) {
+                        pickableRegions.add(regionID);
+                    }
+                }
+            }
+            break;
+        case FULL:
+            for (Integer regionID : map.getRegionIDs()) {
+                if (!wastelands.contains(regionID)) {
+                    pickableRegions.add(regionID);
+                }
+            }
+            break;
+        default:
+            throw new RuntimeException("Unsupported distribution mode");
+        }
+
+        if (pickableRegions.size() < this.getNumPlayers() * settings.getNumberOfStartingTerritories()) {
+            throw new IllegalArgumentException("There are not enough starting regions on this map when using these settings");
+        }
+
+        return pickableRegions;
+    }
+
+    public int getNumPlayers() {
+        return 2;
+    }
+
+    public Set<Integer> getPickableStartingRegions() {
+        return this.pickableStartingRegions;
+    }
+
+    public void getPicksAndInitGame() {
+        communication.sendSettings(player1, player2, this.maxRounds);
+        communication.sendSettings(player2, player1, this.maxRounds);
+
+        communication.sendBaseMapInfo(player1, map);
+        communication.sendBaseMapInfo(player2, map);
+
+        queryAndDistributeStartingRegions(); // decide the player's starting regions
+    }
+
+    /**
+     * Gets prefered picks from both players and distributes starting regions based on the picks. If
+     * a player provides less picks tha necessary a random starting ocation wil be assigned.
+     *
+     * Starting territories are assigned in the ABBAABB... fashion, always starting from player 1
+     */
+    public void queryAndDistributeStartingRegions() {
+
+        int numStartingTerritories = settings.getNumberOfStartingTerritories();
+
+        this.playerPickedRegions.put(player1,
+                communication.sendPickInfoAndRequestStartingPicks(player1, numStartingTerritories, this.pickableStartingRegions));
+
+        this.playerPickedRegions.put(player2,
+                communication.sendPickInfoAndRequestStartingPicks(player2, numStartingTerritories, this.pickableStartingRegions));
+
+        // iterators to go through the picks in the order they are selected
+        HashMap<Player, Iterator<Integer>> playerPicksItr = new HashMap<>();
+        playerPicksItr.put(player1, this.playerPickedRegions.get(player1).iterator());
+        playerPicksItr.put(player2, this.playerPickedRegions.get(player2).iterator());
+
+        this.playerStartingRegions.put(player1, new HashSet<>());
+        this.playerStartingRegions.put(player2, new HashSet<>());
+
+        this.firstPickPlayer = decideWhoGetsFirstPick();  // based on the settings can be either random or given player
+
+        Player secondPickPlayer = (this.firstPickPlayer == player1) ? player2 : player1;
+
+        int iter = 0;
+        // iterate between two players, assigning territories in the A BB AA BB... pattern,
+        // until both players get the required number of starting regions
+        while (!playerDonePicking(player1) || !playerDonePicking(player2)) {
+
+            // player selected to pick first picks on iterations  0, 2, 4, etc. (or all the time after other player is done)
+            // player selected to pick second picks on iterations 1, 3, 5, etc. (or all the time after other player is done)
+            Player picksThisIteration = (playerDonePicking(secondPickPlayer) ||
+                                         ((iter % 2 == 0) && !playerDonePicking(firstPickPlayer))) ? firstPickPlayer : secondPickPlayer;
+
+            Iterator<Integer> remainingPicks = playerPicksItr.get(picksThisIteration);
+
+            // in the A BB AA BB scheme on 1st iteration A gets one pick, on all other iterations players get 2 picks
+            // (except if they have only 1 territory left unassigned)
+            int maxPicksToAssign = (iter == 0) ? 1 : Math.min(2, numUnassignedStartingTerritories(picksThisIteration));
+
+            for (int p = 0; p < maxPicksToAssign; p++) {
+                boolean teritorySelected = false;
+                while (!teritorySelected) {
+                    Integer nextPick = remainingPicks.hasNext()
+                            ? remainingPicks.next()
+                            : getRandomObjectFromCollection(getPickableStartingRegions(), mapGenerationRnd);
+
+                    Region selectedRegion = map.getRegion(nextPick);
+
+                    if (selectedRegion.isNeutral()) {
+                        // mark the region as belonging to the player on the map, and set initial armies
+                        selectedRegion.setPlayerName(picksThisIteration.getName());
+                        selectedRegion.setArmies(settings.getInitilPlayerArmies());
+
+                        // for the record only, add to the list of player's starting regions
+                        playerStartingRegions.get(picksThisIteration).add(nextPick);
+
+                        System.out.format("Player [%s] received starting territory [%d] (%s)%n",
+                                picksThisIteration.getName(), nextPick, selectedRegion.getName());
+
+                        teritorySelected = true;
+                    }
+                }
+            }
+            iter++;
+        }
+
+        System.out.format("All starting territories have been assigned%n");
+
+        /*
+        // FIXME: remove
+        // start of the output for after the picking phase
+        fullPlayedGame.add(new MoveResult(null, map.getMapCopy()));
+        player1PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player1, settings)));
+        player2PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player2, settings)));
+        fullPlayedGame.add(null);
+        player1PlayedGame.add(null);
+        player2PlayedGame.add(null);
+        */
+    }
+
+    private Player decideWhoGetsFirstPick() {
+        double rand = this.gameplayRnd.nextDouble();
+        if (settings.getFirstPlayerPolicty() == Settings.FirstPlayer.PLAYER_1 ||
+            (settings.getFirstPlayerPolicty() == Settings.FirstPlayer.RANDOM && rand < 0.5)) {
+            return player1;
+        } else {
+            return player2;
+        }
+    }
+
+    private boolean playerDonePicking(Player player) {
+        return numUnassignedStartingTerritories(player) == 0;
+    }
+
+    private int numUnassignedStartingTerritories(Player player) {
+        return settings.getNumberOfStartingTerritories() - playerStartingRegions.get(player).size();
     }
 
     /**
@@ -181,42 +312,58 @@ public class Processor
     public void playRound(int roundNumber) {
         this.roundNr = roundNumber;
 
-        getMoves(player1.requestPlaceArmiesMoves(), player1);
-        getMoves(player2.requestPlaceArmiesMoves(), player2);
+        //System.out.println("Standings at round start: ----------");
+        //System.out.println(MapJSON.getStandingsJSON(map).toString());
+        //System.out.println("------------------------------------");
+
+        recalculateStartingArmies();  // calculate how much armies the players get at the start of the
+                                      // round (depending on owned SuperRegions and territories)
+
+        communication.sendTurnStartUpdate(player1, opponentMovesPlayer1, map.getVisibleMapCopyForPlayer(player1, settings));
+        communication.sendTurnStartUpdate(player2, opponentMovesPlayer2, map.getVisibleMapCopyForPlayer(player2, settings));
+
+        // FIXME: replce global queues with a new queue for each turn
+        //        (for the moveQueue, possibly separate queues for PlaceArmies and MoveAttack moves)
+        opponentMovesPlayer1.clear();
+        opponentMovesPlayer2.clear();
+        moveQueue.clear();
+
+        getPlaceArmyMoves(player1);
+        getPlaceArmyMoves(player2);
 
         executePlaceArmies();
 
-        getMoves(player1.requestAttackTransferMoves(), player1);
-        getMoves(player2.requestAttackTransferMoves(), player2);
+        getAttackTransferMoves(player1);
+        getAttackTransferMoves(player2);
 
         executeAttackTransfer();
-
-        moveQueue.clear();
-        recalculateStartingArmies();
-        sendAllInfo();
 
         roundNr++;
     }
 
     /**
-     * Queues the moves given by the player
+     * Queries the player for deployments, and places the orders received into the move queue.
      *
-     * @param movesInput : bot's output
-     * @param player     : player who the output belongs to
+     * @param player : player to ask for deployments
      */
-    private void getMoves(String movesInput, Player player) {
-        ArrayList<Move> moves = parser.parseMoves(movesInput, player);
+    private void getPlaceArmyMoves(Player player) {
+        List<PlaceArmiesMove> deployments = communication.requestPlaceArmiesMoves(player);
 
-        for (Move move : moves) {
-            try // PlaceArmiesMove
-            {
-                PlaceArmiesMove plm = (PlaceArmiesMove) move;
-                queuePlaceArmies(plm);
-            } catch (Exception e) // AttackTransferMove
-            {
-                AttackTransferMove atm = (AttackTransferMove) move;
-                queueAttackTransfer(atm);
-            }
+        for (PlaceArmiesMove move : deployments) {
+            queuePlaceArmies(move);
+        }
+    }
+
+    /**
+     * Queries the player for attack/transfer moves, and places the orders received into the move queue.
+     *
+     * @param player : player to ask for moves and transfers
+     */
+    private void getAttackTransferMoves(Player player) {
+        List<AttackTransferMove> orders = communication.requestAttackTransferMoves(player);
+
+        for (AttackTransferMove move : orders) {
+            queueAttackTransfer(move);
         }
     }
 
@@ -232,12 +379,16 @@ public class Processor
             return;
         }
 
-        Region region = plm.getRegion();
+        Region region = map.getRegion(plm.getRegion());
         Player player = getPlayer(plm.getPlayerName());
         int armies = plm.getArmies();
 
         // check legality
-        if (region.ownedByPlayer(player.getName())) {
+        if (region == null)  {
+            plm.setIllegalMove(" place-armies " + "for non-existing region " + plm.getRegion());
+        } else if (player == null) {
+            plm.setIllegalMove(" place-armies " + "for non-existing player " + plm.getPlayerName());
+        } else if (region.ownedByPlayer(player.getName())) {
             if (armies < 1) {
                 plm.setIllegalMove(" place-armies " + "cannot place less than 1 army");
             } else {
@@ -248,8 +399,9 @@ public class Processor
 
                 player.setArmiesLeft(player.getArmiesLeft() - plm.getArmies());
             }
-        } else
-            plm.setIllegalMove(plm.getRegion().getId() + " place-armies " + " not owned");
+        } else {
+            plm.setIllegalMove(plm.getRegion() + " place-armies " + " not owned");
+        }
 
         moveQueue.addMove(plm);
     }
@@ -266,20 +418,26 @@ public class Processor
             return;
         }
 
-        Region fromRegion = atm.getFromRegion();
-        Region toRegion = atm.getToRegion();
+        Region fromRegion = map.getRegion(atm.getFromRegion());
+        Region toRegion = map.getRegion(atm.getToRegion());
         Player player = getPlayer(atm.getPlayerName());
         int armies = atm.getArmies();
 
         // check legality
-        if (fromRegion.ownedByPlayer(player.getName())) {
+        if (fromRegion == null)  {
+            atm.setIllegalMove(" attack/transfer " + " from non-existing region " + atm.getFromRegion());
+        } else if (toRegion == null) {
+            atm.setIllegalMove(" attack/transfer " + " to non-existing region " + atm.getToRegion());
+        } else if (player == null) {
+            atm.setIllegalMove(" attack/transfer " + " for non-existing player " + atm.getPlayerName());
+        }else if (fromRegion.ownedByPlayer(player.getName())) {
             if (fromRegion.isNeighbor(toRegion)) {
                 if (armies < 1)
                     atm.setIllegalMove(" attack/transfer " + "cannot use less than 1 army");
             } else
-                atm.setIllegalMove(atm.getToRegion().getId() + " attack/transfer " + "not a neighbor");
+                atm.setIllegalMove(atm.getToRegion() + " attack/transfer " + "not a neighbor");
         } else
-            atm.setIllegalMove(atm.getFromRegion().getId() + " attack/transfer " + "not owned");
+            atm.setIllegalMove(atm.getFromRegion() + " attack/transfer " + "not owned");
 
         moveQueue.addMove(atm);
     }
@@ -290,14 +448,19 @@ public class Processor
      */
     private void executePlaceArmies() {
         for (PlaceArmiesMove move : moveQueue.placeArmiesMoves) {
-            if (move.getIllegalMove().equals("")) // the move is not illegal
-                move.getRegion().setArmies(move.getRegion().getArmies() + move.getArmies());
+            Region region = map.getRegion(move.getRegion());
+            if (region == null)
+                continue;
 
-            if (map.visibleRegionsForPlayer(player1).contains(move.getRegion())) {
+            if (move.getIllegalMove().equals("")) { // the move is not illegal
+                region.setArmies(region.getArmies() + move.getArmies());
+            }
+
+            if (map.visibleRegionsForPlayer(player1).contains(region.getId())) {
                 if (move.getPlayerName().equals(player2.getName()))
                     opponentMovesPlayer1.add(move); // for the opponent_moves output
             }
-            if (map.visibleRegionsForPlayer(player2).contains(move.getRegion())) {
+            if (map.visibleRegionsForPlayer(player2).contains(region.getId())) {
                 if (move.getPlayerName().equals(player1.getName()))
                     opponentMovesPlayer2.add(move); // for the opponent_moves output
             }
@@ -305,19 +468,19 @@ public class Processor
     }
 
     /**
-     * Executes all attackTransfer moves currently in the queue Does a lot of legality checks and determines whether it is an
-     * attack or a transfer Also stores the moves for the visualizer
+     * Executes all attackTransfer moves currently in the queue
+     * Does a lot of legality checks and determines whether it is an attack or a transfer.
+     * Also stores the moves for the visualizer
      */
     private void executeAttackTransfer() {
-        LinkedList<Region> visibleRegionsPlayer1Map = map.visibleRegionsForPlayer(player1);
-        LinkedList<Region> visibleRegionsPlayer2Map = map.visibleRegionsForPlayer(player2);
-        LinkedList<Region> visibleRegionsPlayer1OldMap = visibleRegionsPlayer1Map;
-        LinkedList<Region> visibleRegionsPlayer2OldMap = visibleRegionsPlayer2Map;
-        ArrayList<ArrayList<Integer>> usedRegions = new ArrayList<ArrayList<Integer>>();
-        for (int i = 0; i <= map.getRegions().size(); i++) {
-            usedRegions.add(new ArrayList<Integer>());
-        }
-        Map oldMap = map.getMapCopy();
+        Map mapAtTurnStart = map.clone(); // this is the map as players saw it when they issued orders
+
+        Set<Integer> visibleRegionsPlayer1OldMap = mapAtTurnStart.visibleRegionsForPlayer(player1);
+        Set<Integer> visibleRegionsPlayer2OldMap = mapAtTurnStart.visibleRegionsForPlayer(player2);
+
+        // for each attack/transfer from region with ID X to a region with ID Y has an element "X_Y",
+        // to make sure an armies are never moved/transferred twice between the same regions on a single turn
+        Set<String> usedTransfers = new HashSet<>();
 
         int moveNr = 1;
         Boolean previousMoveWasIllegal = false;
@@ -326,26 +489,25 @@ public class Processor
             AttackTransferMove move = moveQueue.getNextAttackTransferMove(moveNr, previousMovePlayer,
                     previousMoveWasIllegal);
 
+            Region fromRegion = map.getRegion(move.getFromRegion());
+            Region toRegion   = map.getRegion(move.getToRegion());
+
             if (move.getIllegalMove().equals("")) // the move is not illegal
             {
-                Region fromRegion = move.getFromRegion();
-                Region oldFromRegion = oldMap.getRegion(move.getFromRegion().getId());
-                Region oldToRegion = oldMap.getRegion(move.getToRegion().getId());
-                Region toRegion = move.getToRegion();
-                Player player = getPlayer(move.getPlayerName());
+                Region oldFromRegion = mapAtTurnStart.getRegion(move.getFromRegion());
+                Region oldToRegion   = mapAtTurnStart.getRegion(move.getToRegion());
+                Player player        = getPlayer(move.getPlayerName());
 
                 if (fromRegion.ownedByPlayer(player.getName())) // check if the fromRegion still belongs to this player
                 {
-                    if (!usedRegions.get(fromRegion.getId()).contains(toRegion.getId())) // between two regions there
-                                                                                         // can only be
-                                                                                         // attacked/transfered once
+                    if (!usedTransfers.contains(fromRegion.getId() + "_" + toRegion.getId())) // each turn there can only be one
+                                                                                              // attack/transfer between two regions
                     {
                         if (oldFromRegion.getArmies() > 1) // there are still armies that can be used
                         {
                             if (oldFromRegion.getArmies() < fromRegion.getArmies()
-                                    && oldFromRegion.getArmies() - 1 < move.getArmies()) // not enough armies on
-                                                                                         // fromRegion at the start of
-                                                                                         // the round?
+                                    && oldFromRegion.getArmies() - 1 < move.getArmies()) // not enough armies on fromRegion
+                                                                                         // at the start of the round?
                                 move.setArmies(oldFromRegion.getArmies() - 1); // move the maximal number.
                             else if (oldFromRegion.getArmies() >= fromRegion.getArmies()
                                     && fromRegion.getArmies() - 1 < move.getArmies()) // not enough armies on fromRegion
@@ -362,10 +524,9 @@ public class Processor
                                 if (fromRegion.getArmies() > 1) {
                                     fromRegion.setArmies(fromRegion.getArmies() - move.getArmies());
                                     toRegion.setArmies(toRegion.getArmies() + move.getArmies());
-                                    usedRegions.get(fromRegion.getId()).add(toRegion.getId());
+                                    usedTransfers.add(fromRegion.getId() + "_" + toRegion.getId());
                                 } else
-                                    move.setIllegalMove(
-                                            move.getFromRegion().getId() + " transfer " + "only has 1 army");
+                                    move.setIllegalMove(move.getFromRegion() + " transfer " + "only has 1 army");
                             } else // attack
                             {
                                 int armiesDestroyed = doAttack(move);
@@ -379,30 +540,30 @@ public class Processor
                                                                                                       // be used again
                                                                                                       // this turn
                                 }
-                                usedRegions.get(fromRegion.getId()).add(toRegion.getId());
+                                usedTransfers.add(fromRegion.getId() + "_" + toRegion.getId());
                             }
                         } else
-                            move.setIllegalMove(move.getFromRegion().getId() + " attack/transfer "
+                            move.setIllegalMove(move.getFromRegion() + " attack/transfer "
                                     + "has used all available armies");
                     } else
-                        move.setIllegalMove(move.getFromRegion().getId() + " attack/transfer "
+                        move.setIllegalMove(move.getFromRegion() + " attack/transfer "
                                 + "has already attacked/transfered to this region");
                 } else
-                    move.setIllegalMove(move.getFromRegion().getId() + " attack/transfer " + "was taken this round");
+                    move.setIllegalMove(move.getFromRegion() + " attack/transfer " + "was taken this round");
             }
 
-            visibleRegionsPlayer1Map = map.visibleRegionsForPlayer(player1);
-            visibleRegionsPlayer2Map = map.visibleRegionsForPlayer(player2);
+            Set<Integer> visibleRegionsPlayer1Map = map.visibleRegionsForPlayer(player1);
+            Set<Integer> visibleRegionsPlayer2Map = map.visibleRegionsForPlayer(player2);
 
-            if (visibleRegionsPlayer1Map.contains(move.getFromRegion())
-                    || visibleRegionsPlayer1Map.contains(move.getToRegion())
-                    || visibleRegionsPlayer1OldMap.contains(move.getToRegion())) {
+            if (visibleRegionsPlayer1Map.contains(fromRegion.getId())
+                    || visibleRegionsPlayer1Map.contains(toRegion.getId())
+                    || visibleRegionsPlayer1OldMap.contains(toRegion.getId())) {
                 if (move.getPlayerName().equals(player2.getName()))
                     opponentMovesPlayer1.add(move); // for the opponent_moves output
             }
-            if (visibleRegionsPlayer2Map.contains(move.getFromRegion())
-                    || visibleRegionsPlayer2Map.contains(move.getToRegion())
-                    || visibleRegionsPlayer2OldMap.contains(move.getToRegion())) {
+            if (visibleRegionsPlayer2Map.contains(fromRegion.getId())
+                    || visibleRegionsPlayer2Map.contains(toRegion.getId())
+                    || visibleRegionsPlayer2OldMap.contains(toRegion.getId())) {
                 if (move.getPlayerName().equals(player1.getName()))
                     opponentMovesPlayer2.add(move); // for the opponent_moves output
             }
@@ -428,8 +589,8 @@ public class Processor
      * @return : amount of defenders destroyed, used for correcting coming moves
      */
     private int doAttack(AttackTransferMove move) {
-        Region fromRegion = move.getFromRegion();
-        Region toRegion = move.getToRegion();
+        Region fromRegion = map.getRegion(move.getFromRegion());
+        Region toRegion = map.getRegion(move.getToRegion());
         int attackingArmies;
         int defendingArmies = toRegion.getArmies();
 
@@ -467,9 +628,8 @@ public class Processor
                 toRegion.setArmies(toRegion.getArmies() - defendersDestroyed);
                 return defendersDestroyed;
             }
-
         } else
-            move.setIllegalMove(move.getFromRegion().getId() + " attack " + "only has 1 army");
+            move.setIllegalMove(move.getFromRegion() + " attack " + "only has 1 army");
 
         return -1;
     }
@@ -494,122 +654,10 @@ public class Processor
         player2.setArmiesLeft(settings.getBaseArmiesPerTurn());
 
         for (SuperRegion superRegion : map.getSuperRegions()) {
-            Player player = getPlayer(superRegion.ownedByPlayer());
+            Player player = getPlayer(map.getSuperRegionOwner(superRegion));
             if (player != null)
                 player.setArmiesLeft(player.getArmiesLeft() + superRegion.getArmiesReward());
         }
-    }
-
-    /**
-     * Sends everything to the players about this round
-     */
-    public void sendAllInfo() {
-        sendStartingArmiesInfo(player1);
-        sendStartingArmiesInfo(player2);
-        sendUpdateMapInfo(player1);
-        sendUpdateMapInfo(player2);
-        sendOpponentMovesInfo(player1);
-        opponentMovesPlayer1.clear();
-        sendOpponentMovesInfo(player2);
-        opponentMovesPlayer2.clear();
-    }
-
-    /**
-     * Sends the list of available starting regions to pick from or the list of regions the opponent has picked
-     *
-     * @param player             : player to send info to
-     * @param regions            : list of regions
-     * @param beforeDistribution : true if we are still in the process of picking armies
-     */
-    private void sendStartingRegionsInfO(Player player, ArrayList<Region> regions, boolean beforeDistribution) {
-        String startingRegionsString;
-        if (beforeDistribution)
-            startingRegionsString = "settings starting_regions";
-        else
-            startingRegionsString = "setup_map opponent_starting_regions";
-
-        for (Region region : regions) {
-            int id = region.getId();
-            startingRegionsString = startingRegionsString.concat(" " + id);
-        }
-
-        player.sendInfo(startingRegionsString);
-    }
-
-    /**
-     * Informs the player about how many regions he can pick from the list of starting regions
-     *
-     * @param player : player to send info to
-     * @param amount : the amount of armies the player can pick
-     */
-    private void sendStartingRegionPickAmount(Player player, int amount) {
-        String pickAmountString = "settings starting_pick_amount " + amount;
-
-        // System.out.println("sending to " + player.getName() + ": " + pickAmountString);
-        player.sendInfo(pickAmountString);
-    }
-
-    /**
-     * Informs the player about how much armies he can place at the start next round
-     *
-     * @param player : player to send the info to
-     */
-    private void sendStartingArmiesInfo(Player player) {
-        String updateStartingArmiesString = "settings starting_armies";
-
-        updateStartingArmiesString = updateStartingArmiesString.concat(" " + player.getArmiesLeft());
-
-        // System.out.println("sending to " + player.getName() + ": " + updateStartingArmiesString);
-        player.sendInfo(updateStartingArmiesString);
-    }
-
-    /**
-     * Informs the player about how his visible map looks now
-     *
-     * @param player : player to send the info to
-     */
-    private void sendUpdateMapInfo(Player player) {
-        LinkedList<Region> visibleRegions = map.visibleRegionsForPlayer(player);
-        String updateMapString = "update_map";
-        for (Region region : visibleRegions) {
-            int id = region.getId();
-            String playerName = region.getPlayerName();
-            int armies = region.getArmies();
-
-            updateMapString = updateMapString.concat(" " + id + " " + playerName + " " + armies);
-        }
-        player.sendInfo(updateMapString);
-    }
-
-    /**
-     * Informs the player about all his opponents' moves
-     *
-     * @param player : player to send the info to
-     */
-    private void sendOpponentMovesInfo(Player player) {
-        String opponentMovesString = "opponent_moves ";
-        LinkedList<Move> opponentMoves = new LinkedList<Move>();
-
-        if (player == player1)
-            opponentMoves = opponentMovesPlayer1;
-        else if (player == player2)
-            opponentMoves = opponentMovesPlayer2;
-
-        for (Move move : opponentMoves) {
-            if (move.getIllegalMove().equals("")) {
-                try {
-                    PlaceArmiesMove plm = (PlaceArmiesMove) move;
-                    opponentMovesString = opponentMovesString.concat(plm.getString() + " ");
-                } catch (Exception e) {
-                    AttackTransferMove atm = (AttackTransferMove) move;
-                    opponentMovesString = opponentMovesString.concat(atm.getString() + " ");
-                }
-            }
-        }
-
-        opponentMovesString = opponentMovesString.substring(0, opponentMovesString.length() - 1);
-
-        player.sendInfo(opponentMovesString);
     }
 
     /**
@@ -623,6 +671,28 @@ public class Processor
             return player2;
         else
             return null;
+    }
+
+    /**
+     * A helper method to get a random object from a collection of objects.
+     *
+     * (note: not very efficient, but is suposedly only used a few times during game setup)
+     *
+     * @param collection : a collection to pick an object from
+     * @param rnd        : the random number generator to be used
+     * @return           : a random object from the collection
+     */
+    private <T> T getRandomObjectFromCollection(Collection<T> collection, Random rnd) {
+        // the algorithm assumes all IDs are sequential, from 1 to number_of_regions
+        double rand = rnd.nextDouble();
+        int index = (int) (rand * collection.size());
+        int i = 0;
+        for (T element : collection) {
+            if (i++ == index) {
+                return element;
+            }
+        }
+        throw new RuntimeException("Error selecting a random object from a collection");
     }
 
     /**

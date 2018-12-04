@@ -19,7 +19,6 @@ package com.theaigames.game.warlight2;
 
 import java.io.*;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.Random;
 import java.util.Scanner;
 
@@ -29,9 +28,8 @@ import com.theaigames.engine.Engine;
 import com.theaigames.engine.Logic;
 import com.theaigames.engine.io.IOPlayer;
 
-import com.theaigames.game.warlight2.move.AttackTransferMove;
-import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 import com.theaigames.game.warlight2.map.Map;
+import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
 
 import org.json.JSONException;
@@ -79,6 +77,8 @@ public class Warlight2 implements Logic
 
         this.playerName1 = playerName1;
         this.playerName2 = playerName2;
+
+        System.out.format("Starting game ID = [%s]%n", this.gameID);
     }
 
     /**
@@ -90,7 +90,7 @@ public class Warlight2 implements Logic
     public void setupGame(ArrayList<IOPlayer> players)
             throws IncorrectPlayerCountException, IOException, JSONException
     {
-        System.out.println("setting up game");
+        System.out.println("Setting up game...");
 
         // Determine array size is two players
         if (players.size() != 2) {
@@ -107,24 +107,16 @@ public class Warlight2 implements Logic
         this.player1 = new Player(playerName1, players.get(0), this.settings);
         this.player2 = new Player(playerName2, players.get(1), this.settings);
 
-        // get map string from database and setup the map
-        Map initMap = MapCreator.createMap(getRAWFileContents(this.mapFile));
-        Map map     = MapCreator.setupMap(initMap, this.settings, this.mapGenerationRnd);
-        this.maxRounds = MapCreator.determineMaxRounds(map);
+        // init the base (no wastelands, no armies) map from the file
+        Map baseMap = MapJSON.createMap(new JSONObject(getRAWFileContents(this.mapFile)));
 
-        // start the processor
+        this.maxRounds = settings.getMaxRounds(baseMap.getRegions().size());
+
+        System.out.println("Customizing the map (wastelands, pickable regions)...");
+        this.processor = new Processor(baseMap, this.settings, this.gameplayRnd, this.mapGenerationRnd, player1, player2);
+
         System.out.println("Starting game...");
-        this.processor = new Processor(map, this.settings, this.gameplayRnd, this.mapGenerationRnd, player1, player2);
-
-        sendSettings(player1);
-        sendSettings(player2);
-        MapCreator.sendSetupMapInfo(player1, map);
-        MapCreator.sendSetupMapInfo(player2, map);
-
-        this.processor.distributeStartingRegions(); // decide the player's starting regions
-        this.processor.recalculateStartingArmies(); // calculate how much armies the players get at the start of the
-                                                    // round (depending on owned SuperRegions)
-        this.processor.sendAllInfo();
+        this.processor.getPicksAndInitGame();
     }
 
     /**
@@ -134,6 +126,8 @@ public class Warlight2 implements Logic
      */
     @Override
     public void playRound(int roundNumber) {
+        System.out.println("------ Playing round #" + roundNumber + " ------");
+
         player1.getBot().addToDump(String.format("Round %d\n", roundNumber));
         player2.getBot().addToDump(String.format("Round %d\n", roundNumber));
 
@@ -149,23 +143,6 @@ public class Warlight2 implements Logic
             return true;
         }
         return false;
-    }
-
-    /**
-     * Sends all game settings to given player
-     *
-     * @param player : player to send settings to
-     */
-    private void sendSettings(Player player) {
-        player.sendInfo("settings timebank " + settings.getMaxTimebank());
-        player.sendInfo("settings time_per_move " + settings.getExtraTimePerMove());
-        player.sendInfo("settings max_rounds " + this.maxRounds);
-        player.sendInfo("settings your_bot " + player.getName());
-
-        if (player.getName().equals(player1.getName()))
-            player.sendInfo("settings opponent_bot " + player2.getName());
-        else
-            player.sendInfo("settings opponent_bot " + player1.getName());
     }
 
     /**
@@ -223,7 +200,7 @@ public class Warlight2 implements Logic
     public void saveGame() {
 
         Player winner = this.processor.getWinner();
-        int score = this.processor.getRoundNr() - 1;
+        //int score = this.processor.getRoundNr() - 1;
 
         if (winner != null) {
             System.out.println("winner: " + winner.getName());
