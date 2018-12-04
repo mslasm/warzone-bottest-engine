@@ -16,7 +16,6 @@
 //    file that was distributed with this source code.
 
 package com.theaigames.game.warlight2.move;
-import com.theaigames.game.warlight2.map.Region;
 
 /**
  * PlaceArmiesMove class
@@ -29,10 +28,10 @@ import com.theaigames.game.warlight2.map.Region;
 
 public class PlaceArmiesMove extends Move {
 
-	private Region region;
+	private int region;
 	private int armies;
 
-	public PlaceArmiesMove(String playerName, Region region, int armies)
+	public PlaceArmiesMove(String playerName, int region, int armies)
 	{
 		super.setPlayerName(playerName);
 		this.region = region;
@@ -49,7 +48,7 @@ public class PlaceArmiesMove extends Move {
 	/**
 	 * @return : The Region this Move will be placing armies on
 	 */
-	public Region getRegion() {
+	public int getRegion() {
 		return region;
 	}
 
@@ -66,7 +65,7 @@ public class PlaceArmiesMove extends Move {
 	@Override
 	public String getString() {
 		if(getIllegalMove().equals(""))
-			return getPlayerName() + " place_armies " + region.getId() + " " + armies;
+			return getPlayerName() + " place_armies " + region + " " + armies;
 		else
 			return getPlayerName() + " illegal_move " + getIllegalMove();
 

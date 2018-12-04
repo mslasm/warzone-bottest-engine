@@ -16,7 +16,6 @@
 //    file that was distributed with this source code.
 
 package com.theaigames.game.warlight2.move;
-import com.theaigames.game.warlight2.map.Region;
 
 /**
  * AttackTransferMove class
@@ -30,11 +29,11 @@ import com.theaigames.game.warlight2.map.Region;
 
 public class AttackTransferMove extends Move {
 
-	private Region fromRegion;
-	private Region toRegion;
+	private int fromRegion;
+	private int toRegion;
 	private int armies;
 
-	public AttackTransferMove(String playerName, Region fromRegion, Region toRegion, int armies)
+	public AttackTransferMove(String playerName, int fromRegion, int toRegion, int armies)
 	{
 		super.setPlayerName(playerName);
 		this.fromRegion = fromRegion;
@@ -52,14 +51,14 @@ public class AttackTransferMove extends Move {
 	/**
 	 * @return : The Region this Move is attacking or transferring from
 	 */
-	public Region getFromRegion() {
+	public int getFromRegion() {
 		return fromRegion;
 	}
 
 	/**
 	 * @return : The Region this Move is attacking or transferring to
 	 */
-	public Region getToRegion() {
+	public int getToRegion() {
 		return toRegion;
 	}
 
@@ -76,7 +75,7 @@ public class AttackTransferMove extends Move {
 	@Override
 	public String getString() {
 		if(getIllegalMove().equals(""))
-			return getPlayerName() + " attack/transfer " + fromRegion.getId() + " " + toRegion.getId() + " " + armies;
+			return getPlayerName() + " attack/transfer " + fromRegion + " " + toRegion + " " + armies;
 		else
 			return getPlayerName() + " illegal_move " + getIllegalMove();
 	}
