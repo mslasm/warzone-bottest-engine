@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -20,55 +20,56 @@ import com.theaigames.game.warlight2.map.Region;
 
 /**
  * PlaceArmiesMove class
- * 
+ *
  * This Move is used in the first part of each round. It represents what Region is increased
  * with how many armies.
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
 public class PlaceArmiesMove extends Move {
-	
+
 	private Region region;
 	private int armies;
-	
+
 	public PlaceArmiesMove(String playerName, Region region, int armies)
 	{
 		super.setPlayerName(playerName);
 		this.region = region;
 		this.armies = armies;
 	}
-	
+
 	/**
 	 * @param n : Sets the number of armies this move will place on a Region
 	 */
 	public void setArmies(int n) {
 		armies = n;
 	}
-	
+
 	/**
 	 * @return : The Region this Move will be placing armies on
 	 */
 	public Region getRegion() {
 		return region;
 	}
-	
+
 	/**
 	 * @return : The number of armies this move will place
 	 */
 	public int getArmies() {
 		return armies;
 	}
-	
+
 	/**
 	 * @return : A string representation of this Move
 	 */
+	@Override
 	public String getString() {
 		if(getIllegalMove().equals(""))
 			return getPlayerName() + " place_armies " + region.getId() + " " + armies;
 		else
 			return getPlayerName() + " illegal_move " + getIllegalMove();
-				
+
 	}
-	
+
 }

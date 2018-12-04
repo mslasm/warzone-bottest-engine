@@ -11,7 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
@@ -20,20 +20,20 @@ import com.theaigames.game.warlight2.map.Region;
 
 /**
  * AttackTransferMove class
- * 
+ *
  * This Move is used in the second part of each round. It represents the attack or transfer of armies from
  * fromRegion to toRegion. If toRegion is owned by the player himself, it's a transfer. If toRegion is
- * owned by the opponent, this Move is an attack. 
- * 
+ * owned by the opponent, this Move is an attack.
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
 
 public class AttackTransferMove extends Move {
-	
+
 	private Region fromRegion;
 	private Region toRegion;
 	private int armies;
-	
+
 	public AttackTransferMove(String playerName, Region fromRegion, Region toRegion, int armies)
 	{
 		super.setPlayerName(playerName);
@@ -41,38 +41,39 @@ public class AttackTransferMove extends Move {
 		this.toRegion = toRegion;
 		this.armies = armies;
 	}
-	
+
 	/**
 	 * @param n : Sets the number of armies of this Move
 	 */
 	public void setArmies(int n) {
 		armies = n;
 	}
-	
+
 	/**
 	 * @return : The Region this Move is attacking or transferring from
 	 */
 	public Region getFromRegion() {
 		return fromRegion;
 	}
-	
+
 	/**
 	 * @return : The Region this Move is attacking or transferring to
 	 */
 	public Region getToRegion() {
 		return toRegion;
 	}
-	
+
 	/**
 	 * @return : The number of armies this Move is attacking or transferring with
 	 */
 	public int getArmies() {
 		return armies;
 	}
-	
+
 	/**
 	 * @return : A string representation of this Move
 	 */
+	@Override
 	public String getString() {
 		if(getIllegalMove().equals(""))
 			return getPlayerName() + " attack/transfer " + fromRegion.getId() + " " + toRegion.getId() + " " + armies;
