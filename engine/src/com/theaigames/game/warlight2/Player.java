@@ -18,10 +18,8 @@
 package com.theaigames.game.warlight2;
 
 import java.io.IOException;
-import java.util.ArrayList;
 
 import com.theaigames.engine.io.IOPlayer;
-import com.theaigames.game.warlight2.map.Region;
 import com.theaigames.game.warlight2.map.Settings;
 
 /**
@@ -115,70 +113,23 @@ public class Player
     }
 
     /**
-     * Asks the bot for his starting region pick and returns the answer
+     * Waits for some input from the bot and returns the received string.
      *
-     * @param pickableRegions : regions the bot can pick from
-     * @return : the bot's output
+     * @return the bot's output
      */
-    public String requestStartingArmies(ArrayList<Region> pickableRegions) {
-        String output = "pick_starting_region " + this.timeBank;
+    public String getResponse() {
         long startTime = System.currentTimeMillis();
 
-        for (Region region : pickableRegions) {
-            output = output.concat(" " + region.getId());
-        }
+        String response = this.bot.getResponse(this.getTimeBank());
 
-        try {
-            this.bot.process(output, "input");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        String response = this.bot.getResponse(this.timeBank);
         long timeElapsed = System.currentTimeMillis() - startTime;
         updateTimeBank(timeElapsed);
 
         return response;
     }
 
-    /**
-     * Asks the bot for his placeArmiesMoves and returns the answer
-     *
-     * @return : the bot's output
-     */
-    public String requestPlaceArmiesMoves() {
-        return requestMoves("place_armies");
+    @Override
+    public int hashCode() {
+        return this.name.hashCode();
     }
-
-    /**
-     * Asks the bot for this attackTransferMoves and returns the answer
-     *
-     * @return : the bot's output
-     */
-    public String requestAttackTransferMoves() {
-        return requestMoves("attack/transfer");
-    }
-
-    /**
-     * Asks the bot for given move type and returns the answer
-     *
-     * @param moveType : attackTransfer move of placeArmies move
-     * @return : the bot's output
-     */
-    private String requestMoves(String moveType) {
-        long startTime = System.currentTimeMillis();
-
-        try {
-            this.bot.process(String.format("go %s %d", moveType, this.timeBank), "input");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        String response = this.bot.getResponse(this.timeBank);
-        long timeElapsed = System.currentTimeMillis() - startTime;
-        updateTimeBank(timeElapsed);
-
-        return response;
-    }
-
 }
