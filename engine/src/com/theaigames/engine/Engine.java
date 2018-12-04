@@ -17,7 +17,7 @@
 
 package com.theaigames.engine;
 
-import com.theaigames.engine.io.BotCommunication;
+import com.theaigames.engine.io.BotRunner;
 import com.theaigames.engine.io.IOPlayer;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -32,7 +32,7 @@ import java.util.logging.Logger;
  *
  * @author Jackie Xu <jackie@starapple.nl>, Jim van Eeden <jim@starapple.nl>
  */
-public class Engine implements BotCommunication {
+public class Engine implements BotRunner {
 
     // Boolean representing current engine running state
     private boolean isRunning;

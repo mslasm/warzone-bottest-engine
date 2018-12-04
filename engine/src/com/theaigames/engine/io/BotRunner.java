@@ -20,13 +20,13 @@ package com.theaigames.engine.io;
 import java.io.IOException;
 
 /**
- * Bot Communication interface
+ * Bot Runner interface
  *
- * Handles callback between players and the engine.
+ * Facilitates sarting of bot processes.
  *
  * @author Jackie Xu <jackie@starapple.nl>, Jim van Eeden <jim@starapple.nl>
  */
-public interface BotCommunication {
+public interface BotRunner {
 
     public void addPlayer(String command, String playerName) throws IOException;
 
