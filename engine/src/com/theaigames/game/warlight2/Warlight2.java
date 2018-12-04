@@ -30,7 +30,6 @@ import com.theaigames.engine.Logic;
 import com.theaigames.engine.io.IOPlayer;
 
 import com.theaigames.game.warlight2.move.AttackTransferMove;
-import com.theaigames.game.warlight2.move.MoveResult;
 import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.Settings;
@@ -216,54 +215,6 @@ public class Warlight2 implements Logic
         System.out.println("Done.");
 
         System.exit(0);
-    }
-
-    /**
-     * Turns the game that is stored in the processor to a nice string for the
-     * visualization
-     *
-     * @param winner   : winner
-     * @param gameView : type of view
-     * @return : string that the visualizer can read
-     */
-    private String getPlayedGame(Player winner, String gameView) {
-        StringBuilder out = new StringBuilder();
-
-        LinkedList<MoveResult> playedGame;
-        if (gameView.equals("player1"))
-            playedGame = this.processor.getPlayer1PlayedGame();
-        else if (gameView.equals("player2"))
-            playedGame = this.processor.getPlayer2PlayedGame();
-        else
-            playedGame = this.processor.getFullPlayedGame();
-
-        playedGame.removeLast();
-        int roundNr = 0;
-        for (MoveResult moveResult : playedGame) {
-            if (moveResult != null) {
-                if (moveResult.getMove() != null) {
-                    try {
-                        PlaceArmiesMove plm = (PlaceArmiesMove) moveResult.getMove();
-                        out.append(plm.getString() + "\n");
-                    } catch (Exception e) {
-                        AttackTransferMove atm = (AttackTransferMove) moveResult.getMove();
-                        out.append(atm.getString() + "\n");
-                    }
-
-                }
-                out.append("map " + moveResult.getMap().getMapString() + "\n");
-            } else {
-                out.append("round " + roundNr + "\n");
-                roundNr++;
-            }
-        }
-
-        if (winner != null)
-            out.append(winner.getName() + " won\n");
-        else
-            out.append("Nobody won\n");
-
-        return out.toString();
     }
 
     /**

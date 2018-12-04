@@ -28,7 +28,6 @@ import com.theaigames.game.warlight2.map.SuperRegion;
 import com.theaigames.game.warlight2.move.AttackTransferMove;
 import com.theaigames.game.warlight2.move.Move;
 import com.theaigames.game.warlight2.move.MoveQueue;
-import com.theaigames.game.warlight2.move.MoveResult;
 import com.theaigames.game.warlight2.move.PlaceArmiesMove;
 
 /**
@@ -47,10 +46,6 @@ public class Processor
     private Random mapGenerationRnd;
     private Parser parser;
     private int roundNr;
-    private LinkedList<MoveResult> pickedStartingRegions;
-    private LinkedList<MoveResult> fullPlayedGame;
-    private LinkedList<MoveResult> player1PlayedGame;
-    private LinkedList<MoveResult> player2PlayedGame;
     private LinkedList<Move> opponentMovesPlayer1;
     private LinkedList<Move> opponentMovesPlayer2;
     private MoveQueue moveQueue;
@@ -69,19 +64,9 @@ public class Processor
 
         parser = new Parser(map);
 
-        fullPlayedGame = new LinkedList<MoveResult>();
-        player1PlayedGame = new LinkedList<MoveResult>();
-        player2PlayedGame = new LinkedList<MoveResult>();
         opponentMovesPlayer1 = new LinkedList<Move>();
         opponentMovesPlayer2 = new LinkedList<Move>();
         pickableStartingRegionsString = "";
-
-        fullPlayedGame.add(new MoveResult(null, map.getMapCopy())); // empty map
-        player1PlayedGame.add(new MoveResult(null, map.getMapCopy()));
-        player2PlayedGame.add(new MoveResult(null, map.getMapCopy()));
-        fullPlayedGame.add(null); // round 0
-        player1PlayedGame.add(null);
-        player2PlayedGame.add(null);
     }
 
     /**
@@ -152,9 +137,6 @@ public class Processor
 
             // storing the picking phase for output
             PlaceArmiesMove pickMove = new PlaceArmiesMove(currentPlayer.getName(), region, 2);
-            fullPlayedGame.add(new MoveResult(pickMove, map.getMapCopy()));
-            player1PlayedGame.add(new MoveResult(pickMove, map.getMapCopy()));
-            player2PlayedGame.add(new MoveResult(pickMove, map.getMapCopy()));
 
             pickableRegions.remove(region);
             i++;
@@ -162,14 +144,6 @@ public class Processor
 
         sendStartingRegionsInfO(player1, player2Regions, false);
         sendStartingRegionsInfO(player2, player1Regions, false);
-
-        // start of the output for after the picking phase
-        fullPlayedGame.add(new MoveResult(null, map.getMapCopy()));
-        player1PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player1)));
-        player2PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player2)));
-        fullPlayedGame.add(null);
-        player1PlayedGame.add(null);
-        player2PlayedGame.add(null);
     }
 
     /**
@@ -220,9 +194,7 @@ public class Processor
         moveQueue.clear();
         recalculateStartingArmies();
         sendAllInfo();
-        fullPlayedGame.add(null); // indicates round end
-        player1PlayedGame.add(null);
-        player2PlayedGame.add(null);
+
         roundNr++;
     }
 
@@ -321,15 +293,11 @@ public class Processor
             if (move.getIllegalMove().equals("")) // the move is not illegal
                 move.getRegion().setArmies(move.getRegion().getArmies() + move.getArmies());
 
-            Map mapCopy = map.getMapCopy();
-            fullPlayedGame.add(new MoveResult(move, mapCopy));
             if (map.visibleRegionsForPlayer(player1).contains(move.getRegion())) {
-                player1PlayedGame.add(new MoveResult(move, map.getVisibleMapCopyForPlayer(player1))); // for the game file
                 if (move.getPlayerName().equals(player2.getName()))
                     opponentMovesPlayer1.add(move); // for the opponent_moves output
             }
             if (map.visibleRegionsForPlayer(player2).contains(move.getRegion())) {
-                player2PlayedGame.add(new MoveResult(move, map.getVisibleMapCopyForPlayer(player2))); // for the game file
                 if (move.getPlayerName().equals(player1.getName()))
                     opponentMovesPlayer2.add(move); // for the opponent_moves output
             }
@@ -426,20 +394,15 @@ public class Processor
             visibleRegionsPlayer1Map = map.visibleRegionsForPlayer(player1);
             visibleRegionsPlayer2Map = map.visibleRegionsForPlayer(player2);
 
-            fullPlayedGame.add(new MoveResult(move, map.getMapCopy()));
             if (visibleRegionsPlayer1Map.contains(move.getFromRegion())
                     || visibleRegionsPlayer1Map.contains(move.getToRegion())
                     || visibleRegionsPlayer1OldMap.contains(move.getToRegion())) {
-                player1PlayedGame.add(new MoveResult(move, map.getVisibleMapCopyForPlayer(player1))); // for the game
-                                                                                                      // file
                 if (move.getPlayerName().equals(player2.getName()))
                     opponentMovesPlayer1.add(move); // for the opponent_moves output
             }
             if (visibleRegionsPlayer2Map.contains(move.getFromRegion())
                     || visibleRegionsPlayer2Map.contains(move.getToRegion())
                     || visibleRegionsPlayer2OldMap.contains(move.getToRegion())) {
-                player2PlayedGame.add(new MoveResult(move, map.getVisibleMapCopyForPlayer(player2))); // for the game
-                                                                                                      // file
                 if (move.getPlayerName().equals(player1.getName()))
                     opponentMovesPlayer2.add(move); // for the opponent_moves output
             }
@@ -660,27 +623,6 @@ public class Processor
             return player2;
         else
             return null;
-    }
-
-    /**
-     * @return : stored game for 'All' view in visualizer
-     */
-    public LinkedList<MoveResult> getFullPlayedGame() {
-        return fullPlayedGame;
-    }
-
-    /**
-     * @return : stored game for '1' view in visualizer
-     */
-    public LinkedList<MoveResult> getPlayer1PlayedGame() {
-        return player1PlayedGame;
-    }
-
-    /**
-     * @return : stored game for '2' view in visualizer
-     */
-    public LinkedList<MoveResult> getPlayer2PlayedGame() {
-        return player2PlayedGame;
     }
 
     /**
