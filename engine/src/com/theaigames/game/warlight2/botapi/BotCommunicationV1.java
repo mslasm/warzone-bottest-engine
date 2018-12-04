@@ -1,4 +1,4 @@
-package com.theaigames.game.warlight2;
+package com.theaigames.game.warlight2.botapi;
 
 import java.util.Collection;
 import java.util.stream.Collectors;
@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.LinkedList;
 
+import com.theaigames.game.warlight2.BotCommunication;
+import com.theaigames.game.warlight2.Player;
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
@@ -212,6 +214,7 @@ public class BotCommunicationV1 implements BotCommunication
         List<? extends Move> parsedMoves = parseMoves(response, player);
 
         // convert to specifically deployment orders
+        @SuppressWarnings("unchecked")
         List<T> typedMoves = parsedMoves.stream()
                 .map(m -> (T) m).collect(Collectors.toCollection(LinkedList::new));
 

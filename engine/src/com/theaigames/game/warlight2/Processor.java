@@ -26,6 +26,7 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Random;
 
+import com.theaigames.game.warlight2.botapi.BotCommunicationV1;
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
