@@ -11,52 +11,38 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
 package com.theaigames.game.warlight2.map;
 
-import java.util.LinkedList;
+import java.util.Set;
 
 /**
  * SuperRegion class
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
-
 public class SuperRegion implements Comparable<SuperRegion>
 {
-    private int id;
-    private int armiesReward;
-    private LinkedList<Region> subRegions;
+    private final int id;
+    private final String name;
+    private final int armiesReward;
+    private final Set<Integer> subRegions;
 
-    public SuperRegion(int id, int armiesReward) {
+    // should be constructed either via clone() or via MapJSON factory methods
+    protected SuperRegion(int id, String name, int armiesReward, Set<Integer> subRegions) {
         this.id = id;
+        this.name = name;
         this.armiesReward = armiesReward;
-        subRegions = new LinkedList<Region>();
+        this.subRegions = subRegions;  // note: a new copy is never created, the same set is re-used in all clones
     }
 
-    /**
-     * Adds a region to this superRegion
-     * 
-     * @param subRegion : region to be added
-     */
-    public void addSubRegion(Region subRegion) {
-        if (!subRegions.contains(subRegion))
-            subRegions.add(subRegion);
-    }
-
-    /**
-     * @return : A string with the name of the player that fully owns this SuperRegion
-     */
-    public String ownedByPlayer() {
-        String playerName = subRegions.getFirst().getPlayerName();
-        for (Region region : subRegions) {
-            if (!playerName.equals(region.getPlayerName()))
-                return null;
-        }
-        return playerName;
+    @Override
+    public SuperRegion clone() {
+        SuperRegion newBonus = new SuperRegion(this.getId(), this.getName(), this.getArmiesReward(), this.getSubRegions());
+        return newBonus;
     }
 
     /**
@@ -64,6 +50,13 @@ public class SuperRegion implements Comparable<SuperRegion>
      */
     public int getId() {
         return id;
+    }
+
+    /**
+     * @return : The name of this SuperRegion
+     */
+    public String getName() {
+        return name;
     }
 
     /**
@@ -76,7 +69,7 @@ public class SuperRegion implements Comparable<SuperRegion>
     /**
      * @return : A list with the Regions that are part of this SuperRegion
      */
-    public LinkedList<Region> getSubRegions() {
+    public Set<Integer> getSubRegions() {
         return subRegions;
     }
 
@@ -90,5 +83,10 @@ public class SuperRegion implements Comparable<SuperRegion>
         if (this.id == sr.id)
             return 0;
         return -1;
+    }
+
+    @Override
+    public int hashCode() {
+        return this.id;
     }
 }

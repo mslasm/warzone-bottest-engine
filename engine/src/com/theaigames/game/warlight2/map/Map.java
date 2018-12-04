@@ -11,103 +11,145 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-//	
+//
 //    For the full copyright and license information, please view the LICENSE
 //    file that was distributed with this source code.
 
 package com.theaigames.game.warlight2.map;
 
-import java.util.Collections;
-import java.util.LinkedList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 
 import com.theaigames.game.warlight2.Player;
 
 /**
  * Map class
- * 
+ *
  * @author Jim van Eeden <jim@starapple.nl>
  */
-
 public class Map
 {
-    public LinkedList<Region> regions;
-    public LinkedList<SuperRegion> superRegions;
+    private String name;
+    private HashMap<Integer, Region> regions;
+    private HashMap<Integer, SuperRegion> bonuses;
 
-    public Map() {
-        this.regions = new LinkedList<Region>();
-        this.superRegions = new LinkedList<SuperRegion>();
-    }
-
-    public Map(LinkedList<Region> regions, LinkedList<SuperRegion> superRegions) {
+    // used for clone() only
+    protected Map(String name, HashMap<Integer, Region> regions, HashMap<Integer, SuperRegion> bonuses) {
+        this.name = name;
         this.regions = regions;
-        this.superRegions = superRegions;
+        this.bonuses = bonuses;
+
+        // check that all references to region IDs are correct (region.neighbours and superRegion.subRegions)
+        checkConsistency();
     }
 
-    /**
-     * add a Region to the map
-     * 
-     * @param region : Region to be added
-     */
-    public void add(Region region) {
-        for (Region r : regions)
-            if (r.getId() == region.getId()) {
-                System.err.println("Region cannot be added: id already exists.");
-                return;
-            }
-        regions.add(region);
-    }
-
-    /**
-     * add a SuperRegion to the map
-     * 
-     * @param superRegion : SuperRegion to be added
-     */
-    public void add(SuperRegion superRegion) {
-        for (SuperRegion s : superRegions)
-            if (s.getId() == superRegion.getId()) {
-                System.err.println("SuperRegion cannot be added: id already exists.");
-                return;
-            }
-        superRegions.add(superRegion);
+    public String getName() {
+        return this.name;
     }
 
     /**
      * @return : a new Map object exactly the same as this one
      */
-    public Map getMapCopy() {
-        Map newMap = new Map();
-        for (SuperRegion sr : superRegions) //copy superRegions
-        {
-            SuperRegion newSuperRegion = new SuperRegion(sr.getId(), sr.getArmiesReward());
-            newMap.add(newSuperRegion);
-        }
-        for (Region r : regions) //copy regions
-        {
-            Region newRegion = new Region(r.getId(), newMap.getSuperRegion(r.getSuperRegion().getId()),
-                    r.getPlayerName(), r.getArmies());
-            newMap.add(newRegion);
-        }
-        for (Region r : regions) //add neighbors to copied regions
-        {
-            Region newRegion = newMap.getRegion(r.getId());
-            for (Region neighbor : r.getNeighbors())
-                newRegion.addNeighbor(newMap.getRegion(neighbor.getId()));
-        }
-        return newMap;
+    @Override
+    public Map clone() {
+        // copy regions
+        HashMap<Integer, Region> regionsCopy = new HashMap<>();
+        regions.forEach((regionID, region) -> regionsCopy.put(regionID, region.clone()));
+
+        // copy superRegions
+        HashMap<Integer, SuperRegion> bonusesCopy = new HashMap<>();
+        bonuses.forEach((bonusID, bonus) -> bonusesCopy.put(bonusID, bonus.clone()));
+
+        return new Map(this.getName(), regionsCopy, bonusesCopy);
     }
 
     /**
-     * @return : the list of all Regions in this map
+     * @param player
+     * @return : a copy of the map as visible by a given player
      */
-    public LinkedList<Region> getRegions() {
-        return regions;
+    public Map getVisibleMapCopyForPlayer(Player player, Settings settings) {
+        Map visibleMap = this.clone();
+
+        // first determine which regions are visible and in which way (owner, armies, both, none)
+        if (settings.getFogLevel() != Settings.FogLevel.NO_FOG) {
+            final Set<Integer> visibleArmiesRegions;
+            final Set<Integer> visibleOwnersRegions; // note: should always a superset of visibleArmiesRegions
+            switch(settings.getFogLevel()) {
+            case EXTREME_FOG:
+                visibleArmiesRegions = ownedRegionsByPlayer(player);    // only see armies for own territories
+                visibleOwnersRegions = visibleArmiesRegions;            // only see owner for own territories
+                break;
+            case HEAVY_FOG:
+                visibleArmiesRegions = ownedRegionsByPlayer(player);    // only see armies for own territories
+                visibleOwnersRegions = visibleRegionsForPlayer(player); // see owners for all neighbours
+                break;
+            case LIGHT_FOG:
+                visibleArmiesRegions = visibleRegionsForPlayer(player); // see armies for own and neighbours
+                visibleOwnersRegions = getRegionIDs();                  // see owner for all regions
+                break;
+            case NORMAL_FOG:
+            default:  // default to NORMAL_FOG for all unsupported fogs
+                visibleArmiesRegions = visibleRegionsForPlayer(player); // see armies for own and neighbours
+                visibleOwnersRegions = visibleArmiesRegions;            // see owner for own and neighbours
+            }
+
+            // apply fog, as needed
+            visibleMap.regions.forEach((regionID, region) -> {
+                if (!visibleArmiesRegions.contains(regionID)) {
+                    region.markAsFogged(visibleOwnersRegions.contains(regionID));
+                }
+            });
+        }
+
+        return visibleMap;
     }
 
     /**
-     * @return : the list of all SuperRegions in this map
+     * @param : a superRegion to check for cmplete ownership
+     * @return : A string with the name of the player that fully owns the given SuperRegion, or null
      */
-    public LinkedList<SuperRegion> getSuperRegions() {
-        return superRegions;
+    public String getSuperRegionOwner(SuperRegion superRegion) {
+        String playerName = null;
+        for (Integer regionID : superRegion.getSubRegions()) {
+            Region region = this.getRegion(regionID);
+            if (playerName == null) {
+                // initilaize to the owner of the first region
+                playerName = region.getOwnerName();
+            } else if (!playerName.equals(region.getOwnerName()))
+                // if more than one owner => superRegion s not owned by any one single player
+                return null;
+        }
+        return playerName;
+    }
+
+    /**
+     * @return : a collection of all Regions in this map
+     */
+    public Collection<Region> getRegions() {
+        return regions.values();
+    }
+
+    /**
+     * @return : the set of IDs of all Regions in this map
+     */
+    public Set<Integer> getRegionIDs() {
+        return regions.keySet();
+    }
+
+    /**
+     * @return : a collection of all SuperRegions in this map
+     */
+    public Collection<SuperRegion> getSuperRegions() {
+        return bonuses.values();
+    }
+
+    /**
+     * @return : the set of IDs of all SuperRegions in this map
+     */
+    public Set<Integer> getSuperRegionIDs() {
+        return bonuses.keySet();
     }
 
     /**
@@ -115,11 +157,10 @@ public class Map
      * @return : the matching Region object
      */
     public Region getRegion(int id) {
-        for (Region region : regions)
-            if (region.getId() == id)
-                return region;
-        System.err.println("Could not find region with id " + id);
-        return null;
+        Region region = regions.get(id);
+        if (region == null)
+            System.err.println("Could not find region with id " + id);
+        return region;
     }
 
     /**
@@ -127,84 +168,65 @@ public class Map
      * @return : the matching SuperRegion object
      */
     public SuperRegion getSuperRegion(int id) {
-        for (SuperRegion superRegion : superRegions)
-            if (superRegion.getId() == id)
-                return superRegion;
-        System.err.println("Could not find superRegion with id " + id);
-        return null;
-    }
-
-    /**
-     * Sors all the regions and superRegions in this map by id
-     */
-    public void sort() {
-        Collections.sort(this.regions);
-        Collections.sort(this.superRegions);
-    }
-
-    /**
-     * @return : a string representation of this map
-     */
-    public String getMapString() {
-        String mapString = "";
-        for (Region region : regions) {
-            mapString = mapString
-                    .concat(region.getId() + ";" + region.getPlayerName() + ";" + region.getArmies() + " ");
-        }
-        return mapString;
+        SuperRegion bonus = bonuses.get(id);
+        if (bonus == null)
+            System.err.println("Could not find superRegion with id " + id);
+        return bonus;
     }
 
     /**
      * @param player
-     * @return : a list of all regions owned by given player
+     * @return : a list of all region IDs owned by given player
      */
-    public LinkedList<Region> ownedRegionsByPlayer(Player player) {
-        LinkedList<Region> ownedRegions = new LinkedList<Region>();
+    public Set<Integer> ownedRegionsByPlayer(Player player) {
+        Set<Integer> ownedRegionIDs = new HashSet<>();
 
         for (Region region : this.getRegions())
-            if (region.getPlayerName().equals(player.getName()))
-                ownedRegions.add(region);
+            if (region.getOwnerName().equals(player.getName()))
+                ownedRegionIDs.add(region.getId());
 
-        return ownedRegions;
+        return ownedRegionIDs;
     }
 
     /**
      * Needed because fog of war
-     * 
+     *
      * @param player
      * @return : a list of all visible regions for given player
      */
-    public LinkedList<Region> visibleRegionsForPlayer(Player player) {
-        LinkedList<Region> visibleRegions = new LinkedList<Region>();
-        LinkedList<Region> ownedRegions = ownedRegionsByPlayer(player);
+    public Set<Integer> visibleRegionsForPlayer(Player player) {
+        Set<Integer> ownedRegionIDs = ownedRegionsByPlayer(player);
+        Set<Integer> visibleRegionIDs = new HashSet<>(ownedRegionIDs);
 
-        visibleRegions.addAll(ownedRegions);
-
-        for (Region region : ownedRegions)
-            for (Region neighbor : region.getNeighbors())
-                if (!visibleRegions.contains(neighbor))
-                    visibleRegions.add(neighbor);
-
-        return visibleRegions;
-    }
-
-    /**
-     * @param player
-     * @return : a copy of the visible map for given player
-     */
-    public Map getVisibleMapCopyForPlayer(Player player) {
-        Map visibleMap = getMapCopy();
-        LinkedList<Region> visibleRegions = visibleRegionsForPlayer(player);
-
-        for (Region region : regions) {
-            if (!visibleRegions.contains(region)) {
-                Region unknownRegion = visibleMap.getRegion(region.getId());
-                unknownRegion.setPlayerName("unknown");
-                unknownRegion.setArmies(0);
+        for (Integer regionID : ownedRegionIDs) {
+            for (Integer neighborID : this.getRegion(regionID).getNeighbors()) {
+                visibleRegionIDs.add(neighborID);  // since this is a set nothing happens if neighbour already in the set
             }
         }
-
-        return visibleMap;
+        return visibleRegionIDs;
     }
 
+    private void checkConsistency() {
+        regions.forEach((regionID, region) -> {
+            if (region.getNeighbors().size() == 0) {
+                throw new IllegalArgumentException("Region " + regionID + " is inaccessible (has no neighbouring regions)");
+            }
+            region.getNeighbors().forEach(neighbourID -> {
+                if (!regions.containsKey(neighbourID)) {
+                    throw new IllegalArgumentException("Region " + regionID + " neighbours a non-existing region " + neighbourID);
+                }
+            });
+        });
+
+        bonuses.forEach((bonusID, bonus) -> {
+            if (bonus.getSubRegions().size() == 0) {
+                throw new IllegalArgumentException("Bonus " + bonusID + " has no territories");
+            }
+            bonus.getSubRegions().forEach(subregionID -> {
+                if (!regions.containsKey(subregionID)) {
+                    throw new IllegalArgumentException("Bonus " + bonusID + " contains a non-existing region " + subregionID);
+                }
+            });
+        });
+    }
 }
