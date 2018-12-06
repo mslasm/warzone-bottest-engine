@@ -35,6 +35,8 @@ public class Map
     private HashMap<Integer, Region> regions;
     private HashMap<Integer, SuperRegion> bonuses;
 
+    private HashMap<Integer, Set<Integer>> regionBonusesCache;
+
     // used for clone() only
     protected Map(String name, HashMap<Integer, Region> regions, HashMap<Integer, SuperRegion> bonuses) {
         this.name = name;
@@ -43,6 +45,9 @@ public class Map
 
         // check that all references to region IDs are correct (region.neighbours and superRegion.subRegions)
         checkConsistency();
+
+        // update back-references from a region to all bonuses the region is part of
+        updateRegionBonusCache();
     }
 
     public String getName() {
@@ -206,6 +211,28 @@ public class Map
         return visibleRegionIDs;
     }
 
+    public Collection<Integer> getRegionBonuses(Region region) {
+        return regionBonusesCache.get(region.getId());
+    }
+
+    public boolean hasOverlappingBonuses() {
+        for (Region region : this.getRegions()) {
+            if (getRegionBonuses(region).size() > 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasRegionsNotInABonus() {
+        for (Region region : this.getRegions()) {
+            if (getRegionBonuses(region).size() != 1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void checkConsistency() {
         regions.forEach((regionID, region) -> {
             if (region.getNeighbors().size() == 0) {
@@ -226,6 +253,20 @@ public class Map
                 if (!regions.containsKey(subregionID)) {
                     throw new IllegalArgumentException("Bonus " + bonusID + " contains a non-existing region " + subregionID);
                 }
+            });
+        });
+    }
+
+    private void updateRegionBonusCache() {
+        regionBonusesCache = new HashMap<>();
+
+        regions.forEach((regionID, region) -> {
+            regionBonusesCache.put(regionID, new HashSet<>());
+        });
+
+        bonuses.forEach((bonusID, bonus) -> {
+            bonus.getSubRegions().forEach(regionID -> {
+                regionBonusesCache.get(regionID).add(bonusID);
             });
         });
     }

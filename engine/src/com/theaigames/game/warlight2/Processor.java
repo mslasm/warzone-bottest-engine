@@ -26,7 +26,8 @@ import java.util.HashSet;
 import java.util.HashMap;
 import java.util.Random;
 
-import com.theaigames.game.warlight2.botapi.BotCommunicationV1;
+//import com.theaigames.game.warlight2.botapi.CommunicationV1;
+import com.theaigames.game.warlight2.botapi.CommunicationAiGames;
 import com.theaigames.game.warlight2.map.Map;
 import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
@@ -96,7 +97,8 @@ public class Processor
         this.playerPickedRegions = new HashMap<>();
         this.playerStartingRegions = new HashMap<>();
 
-        this.communication = new BotCommunicationV1(settings);
+        //this.communication = new CommunicationV1(settings);
+        this.communication = new CommunicationAiGames(settings, map);
 
         opponentMovesPlayer1 = new LinkedList<Move>();
         opponentMovesPlayer2 = new LinkedList<Move>();
