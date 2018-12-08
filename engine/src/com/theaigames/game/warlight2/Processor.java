@@ -29,7 +29,6 @@ import java.util.Random;
 //import com.theaigames.game.warlight2.botapi.CommunicationV1;
 import com.theaigames.game.warlight2.botapi.CommunicationAiGames;
 import com.theaigames.game.warlight2.map.Map;
-import com.theaigames.game.warlight2.map.MapJSON;
 import com.theaigames.game.warlight2.map.Settings;
 import com.theaigames.game.warlight2.map.Region;
 import com.theaigames.game.warlight2.map.SuperRegion;
@@ -60,8 +59,7 @@ public class Processor
     private int maxRounds;
     private int roundNr;
 
-    private LinkedList<Move> opponentMovesPlayer1;
-    private LinkedList<Move> opponentMovesPlayer2;
+    private HashMap<Player, LinkedList<Move>> visiblePrevTurnMoves;
 
     private MoveQueue moveQueue;
 
@@ -100,8 +98,9 @@ public class Processor
         //this.communication = new CommunicationV1(settings);
         this.communication = new CommunicationAiGames(settings, map);
 
-        opponentMovesPlayer1 = new LinkedList<Move>();
-        opponentMovesPlayer2 = new LinkedList<Move>();
+        visiblePrevTurnMoves = new HashMap<>();
+        visiblePrevTurnMoves.put(player1, new LinkedList<Move>());
+        visiblePrevTurnMoves.put(player2, new LinkedList<Move>());
     }
 
     /**
@@ -276,17 +275,6 @@ public class Processor
         }
 
         System.out.format("All starting territories have been assigned%n");
-
-        /*
-        // FIXME: remove
-        // start of the output for after the picking phase
-        fullPlayedGame.add(new MoveResult(null, map.getMapCopy()));
-        player1PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player1, settings)));
-        player2PlayedGame.add(new MoveResult(null, map.getVisibleMapCopyForPlayer(player2, settings)));
-        fullPlayedGame.add(null);
-        player1PlayedGame.add(null);
-        player2PlayedGame.add(null);
-        */
     }
 
     private Player decideWhoGetsFirstPick() {
@@ -322,13 +310,13 @@ public class Processor
         recalculateStartingArmies();  // calculate how much armies the players get at the start of the
                                       // round (depending on owned SuperRegions and territories)
 
-        communication.sendTurnStartUpdate(player1, opponentMovesPlayer1, map.getVisibleMapCopyForPlayer(player1, settings));
-        communication.sendTurnStartUpdate(player2, opponentMovesPlayer2, map.getVisibleMapCopyForPlayer(player2, settings));
+        communication.sendTurnStartUpdate(player1, visiblePrevTurnMoves.get(player1), map.getVisibleMapCopyForPlayer(player1, settings));
+        communication.sendTurnStartUpdate(player2, visiblePrevTurnMoves.get(player2), map.getVisibleMapCopyForPlayer(player2, settings));
 
         // FIXME: replce global queues with a new queue for each turn
         //        (for the moveQueue, possibly separate queues for PlaceArmies and MoveAttack moves)
-        opponentMovesPlayer1.clear();
-        opponentMovesPlayer2.clear();
+        visiblePrevTurnMoves.get(player1).clear();
+        visiblePrevTurnMoves.get(player2).clear();
         moveQueue.clear();
 
         getPlaceArmyMoves(player1);
@@ -450,6 +438,9 @@ public class Processor
      * moves for the visualizer
      */
     private void executePlaceArmies() {
+        Set<Integer> visibleRegionsPlayer1 = map.visibleRegionsForPlayer(player1);
+        Set<Integer> visibleRegionsPlayer2 = map.visibleRegionsForPlayer(player2);
+
         for (PlaceArmiesMove move : moveQueue.placeArmiesMoves) {
             Region region = map.getRegion(move.getRegion());
             if (region == null)
@@ -457,15 +448,13 @@ public class Processor
 
             if (move.getIllegalMove().equals("")) { // the move is not illegal
                 region.setArmies(region.getArmies() + move.getArmies());
-            }
 
-            if (map.visibleRegionsForPlayer(player1).contains(region.getId())) {
-                if (move.getPlayerName().equals(player2.getName()))
-                    opponentMovesPlayer1.add(move); // for the opponent_moves output
-            }
-            if (map.visibleRegionsForPlayer(player2).contains(region.getId())) {
-                if (move.getPlayerName().equals(player1.getName()))
-                    opponentMovesPlayer2.add(move); // for the opponent_moves output
+                if (visibleRegionsPlayer1.contains(region.getId())) {
+                    visiblePrevTurnMoves.get(player1).add(move); // for the visible_moves/opponent_moves output
+                }
+                if (visibleRegionsPlayer2.contains(region.getId())) {
+                    visiblePrevTurnMoves.get(player2).add(move); // for the visible_moves/opponent_moves output
+                }
             }
         }
     }
@@ -561,14 +550,13 @@ public class Processor
             if (visibleRegionsPlayer1Map.contains(fromRegion.getId())
                     || visibleRegionsPlayer1Map.contains(toRegion.getId())
                     || visibleRegionsPlayer1OldMap.contains(toRegion.getId())) {
-                if (move.getPlayerName().equals(player2.getName()))
-                    opponentMovesPlayer1.add(move); // for the opponent_moves output
+                // note: froRegion does not change owenrship, so no need otcheck old map if we checked new map
+                visiblePrevTurnMoves.get(player1).add(move); // for the visible_moves/opponent_moves output
             }
             if (visibleRegionsPlayer2Map.contains(fromRegion.getId())
                     || visibleRegionsPlayer2Map.contains(toRegion.getId())
                     || visibleRegionsPlayer2OldMap.contains(toRegion.getId())) {
-                if (move.getPlayerName().equals(player1.getName()))
-                    opponentMovesPlayer2.add(move); // for the opponent_moves output
+                visiblePrevTurnMoves.get(player2).add(move); // for the visible_moves/opponent_moves output
             }
 
             visibleRegionsPlayer1OldMap = visibleRegionsPlayer1Map;
