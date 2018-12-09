@@ -129,7 +129,8 @@ public class CommunicationV1 extends CommunicationBaseParser implements BotCommu
         String visibleMovesString = "visible_moves ";
 
         for (Move move : visibleMoves) {
-            if (move.getIllegalMove().equals("")) {
+            if (move.isLegalMove()) {
+                // TODO: include illegal moves in the list of reported moves
                 visibleMovesString = visibleMovesString.concat(move.getString() + " ");
             }
         }

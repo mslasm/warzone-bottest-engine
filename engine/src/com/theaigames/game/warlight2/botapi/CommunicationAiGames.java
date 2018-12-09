@@ -198,7 +198,7 @@ public class CommunicationAiGames extends CommunicationBaseParser implements Bot
                 // theaigames.com protocol only sends opponent moves
                 continue;
             }
-            if (move.getIllegalMove().equals("")) {
+            if (move.isLegalMove()) {
                 opponentMovesString = opponentMovesString.concat(move.getString() + " ");
             }
         }

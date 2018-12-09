@@ -70,13 +70,16 @@ public class AttackTransferMove extends Move {
 	}
 
 	/**
+     * TODO: this method is used for communicating move value to the bots,
+     *       it i sbetter to decouple implementation of this class from communication protocol
+     *
 	 * @return : A string representation of this Move
 	 */
 	@Override
 	public String getString() {
-		if(getIllegalMove().equals(""))
+		if(isLegalMove())
 			return getPlayerName() + " attack/transfer " + fromRegion + " " + toRegion + " " + armies;
 		else
-			return getPlayerName() + " illegal_move " + getIllegalMove();
+			return getPlayerName() + " illegal_move " + getIllegalDescription();
 	}
 }

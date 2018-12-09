@@ -376,22 +376,22 @@ public class Processor
 
         // check legality
         if (region == null)  {
-            plm.setIllegalMove(" place-armies " + "for non-existing region " + plm.getRegion());
+            plm.markAsIllegal(" place-armies " + "for non-existing region " + plm.getRegion());
         } else if (player == null) {
-            plm.setIllegalMove(" place-armies " + "for non-existing player " + plm.getPlayerName());
+            plm.markAsIllegal(" place-armies " + "for non-existing player " + plm.getPlayerName());
         } else if (region.ownedByPlayer(player.getName())) {
             if (armies < 1) {
-                plm.setIllegalMove(" place-armies " + "cannot place less than 1 army");
+                plm.markAsIllegal(" place-armies " + "cannot place less than 1 army");
             } else {
                 if (armies > player.getArmiesLeft()) // player wants to place more armies than he has left
                     plm.setArmies(player.getArmiesLeft()); // place all armies he has left
                 if (player.getArmiesLeft() <= 0)
-                    plm.setIllegalMove(" place-armies " + "no armies left to place");
+                    plm.markAsIllegal(" place-armies " + "no armies left to place");
 
                 player.setArmiesLeft(player.getArmiesLeft() - plm.getArmies());
             }
         } else {
-            plm.setIllegalMove(plm.getRegion() + " place-armies " + " not owned");
+            plm.markAsIllegal(plm.getRegion() + " place-armies " + " not owned");
         }
 
         moveQueue.addMove(plm);
@@ -416,19 +416,19 @@ public class Processor
 
         // check legality
         if (fromRegion == null)  {
-            atm.setIllegalMove(" attack/transfer " + " from non-existing region " + atm.getFromRegion());
+            atm.markAsIllegal(" attack/transfer " + " from non-existing region " + atm.getFromRegion());
         } else if (toRegion == null) {
-            atm.setIllegalMove(" attack/transfer " + " to non-existing region " + atm.getToRegion());
+            atm.markAsIllegal(" attack/transfer " + " to non-existing region " + atm.getToRegion());
         } else if (player == null) {
-            atm.setIllegalMove(" attack/transfer " + " for non-existing player " + atm.getPlayerName());
+            atm.markAsIllegal(" attack/transfer " + " for non-existing player " + atm.getPlayerName());
         }else if (fromRegion.ownedByPlayer(player.getName())) {
             if (fromRegion.isNeighbor(toRegion)) {
                 if (armies < 1)
-                    atm.setIllegalMove(" attack/transfer " + "cannot use less than 1 army");
+                    atm.markAsIllegal(" attack/transfer " + "cannot use less than 1 army");
             } else
-                atm.setIllegalMove(atm.getToRegion() + " attack/transfer " + "not a neighbor");
+                atm.markAsIllegal(atm.getToRegion() + " attack/transfer " + "not a neighbor");
         } else
-            atm.setIllegalMove(atm.getFromRegion() + " attack/transfer " + "not owned");
+            atm.markAsIllegal(atm.getFromRegion() + " attack/transfer " + "not owned");
 
         moveQueue.addMove(atm);
     }
@@ -446,7 +446,7 @@ public class Processor
             if (region == null)
                 continue;
 
-            if (move.getIllegalMove().equals("")) { // the move is not illegal
+            if (move.isLegalMove()) { // the move is not illegal
                 region.setArmies(region.getArmies() + move.getArmies());
 
                 if (visibleRegionsPlayer1.contains(region.getId())) {
@@ -484,7 +484,7 @@ public class Processor
             Region fromRegion = map.getRegion(move.getFromRegion());
             Region toRegion   = map.getRegion(move.getToRegion());
 
-            if (move.getIllegalMove().equals("")) // the move is not illegal
+            if (move.isLegalMove()) // the move is not illegal
             {
                 Region oldFromRegion = mapAtTurnStart.getRegion(move.getFromRegion());
                 Region oldToRegion   = mapAtTurnStart.getRegion(move.getToRegion());
@@ -518,7 +518,7 @@ public class Processor
                                     toRegion.setArmies(toRegion.getArmies() + move.getArmies());
                                     usedTransfers.add(fromRegion.getId() + "_" + toRegion.getId());
                                 } else
-                                    move.setIllegalMove(move.getFromRegion() + " transfer " + "only has 1 army");
+                                    move.markAsIllegal(move.getFromRegion() + " transfer " + "only has 1 army");
                             } else // attack
                             {
                                 int armiesDestroyed = doAttack(move);
@@ -535,13 +535,13 @@ public class Processor
                                 usedTransfers.add(fromRegion.getId() + "_" + toRegion.getId());
                             }
                         } else
-                            move.setIllegalMove(move.getFromRegion() + " attack/transfer "
+                            move.markAsIllegal(move.getFromRegion() + " attack/transfer "
                                     + "has used all available armies");
                     } else
-                        move.setIllegalMove(move.getFromRegion() + " attack/transfer "
+                        move.markAsIllegal(move.getFromRegion() + " attack/transfer "
                                 + "has already attacked/transfered to this region");
                 } else
-                    move.setIllegalMove(move.getFromRegion() + " attack/transfer " + "was taken this round");
+                    move.markAsIllegal(move.getFromRegion() + " attack/transfer " + "was taken this round");
             }
 
             Set<Integer> visibleRegionsPlayer1Map = map.visibleRegionsForPlayer(player1);
@@ -563,7 +563,7 @@ public class Processor
             visibleRegionsPlayer2OldMap = visibleRegionsPlayer2Map;
 
             // set some stuff to know what next move to get
-            if (move.getIllegalMove().equals("")) {
+            if (move.isLegalMove()) {
                 previousMoveWasIllegal = false;
                 moveNr++;
             } else {
@@ -620,7 +620,7 @@ public class Processor
                 return defendersDestroyed;
             }
         } else
-            move.setIllegalMove(move.getFromRegion() + " attack " + "only has 1 army");
+            move.markAsIllegal(move.getFromRegion() + " attack " + "only has 1 army");
 
         return -1;
     }

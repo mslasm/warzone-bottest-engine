@@ -27,8 +27,8 @@ package com.theaigames.game.warlight2.move;
 
 public abstract class Move {
 
-	private String playerName; //name of the player that did this move
-	private String illegalMove = ""; //gets the value of the error message if move is illegal, else remains empty
+	private String playerName;  // name of the player that did this move
+	private String illegalMove; // the value of the error message if move is illegal (including ""), or null if move is legal
 
 	/**
 	 * @param playerName : Sets the name of the Player that this Move belongs to
@@ -38,10 +38,10 @@ public abstract class Move {
 	}
 
 	/**
-	 * @param illegalMove : Sets the error message of this move. Only set this if the Move is illegal.
+	 * @param problemDescription : error message of this move, can be null/blank
 	 */
-	public void setIllegalMove(String illegalMove) {
-		this.illegalMove = illegalMove;
+	public void markAsIllegal(String problemDescription) {
+		this.illegalMove = (problemDescription == null) ? "" : problemDescription;
 	}
 
 	/**
@@ -51,10 +51,14 @@ public abstract class Move {
 		return playerName;
 	}
 
+	public boolean isLegalMove() {
+	    return illegalMove == null;
+	}
+
 	/**
-	 * @return : The error message of this Move
+	 * @return : The error message of this Move, or null if move is legal
 	 */
-	public String getIllegalMove() {
+	public String getIllegalDescription() {
 		return illegalMove;
 	}
 
