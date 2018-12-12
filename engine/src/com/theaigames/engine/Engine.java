@@ -43,10 +43,14 @@ public class Engine implements BotRunner {
     // ArrayList containing player handlers
     private ArrayList<IOPlayer> players;
 
+    // logger used to log all messages sent to bots and received from bots - for debugging purposes
+    private Logger botCommunicationLogger;
+
     // Engine constructor
-    public Engine() {
+    public Engine(Logger botCommunicationLogger) {
         this.isRunning = false;
         this.players = new ArrayList<IOPlayer>();
+        this.botCommunicationLogger = botCommunicationLogger;
     }
 
     // Sets game logic
@@ -67,7 +71,7 @@ public class Engine implements BotRunner {
         Process process = Runtime.getRuntime().exec(command);
 
         // Attach IO to process
-        IOPlayer player = new IOPlayer(process, playerName);
+        IOPlayer player = new IOPlayer(process, playerName, botCommunicationLogger);
 
         // Add player
         this.players.add(player);
@@ -91,7 +95,7 @@ public class Engine implements BotRunner {
         // Keep running
         while (this.isRunning) {
 
-        	round++;
+            round++;
 
             // Play a round
             this.logic.playRound(round);
@@ -106,10 +110,10 @@ public class Engine implements BotRunner {
 
                 // Close off everything
                 try {
-                	this.logic.finish();
+                    this.logic.finish();
                 } catch (Exception ex) {
                     System.out.println(ex);
-                	Logger.getLogger(Engine.class.getName()).log(Level.SEVERE, null, ex);
+                    Logger.getLogger(Engine.class.getName()).log(Level.SEVERE, null, ex);
                 }
 
             }

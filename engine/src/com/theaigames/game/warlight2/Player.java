@@ -102,11 +102,11 @@ public class Player
     /**
      * Sends given string to bot
      *
-     * @param info
+     * @param data a string to be sent to the player
      */
-    public void sendInfo(String info) {
+    public void sendInfo(String data) {
         try {
-            this.bot.process(info, "input");
+            this.bot.sendToPlayer(data);
         } catch (IOException e) {
             e.printStackTrace();
         }

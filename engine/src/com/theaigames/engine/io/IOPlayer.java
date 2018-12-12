@@ -19,6 +19,8 @@ package com.theaigames.engine.io;
 
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.util.List;
+import java.util.LinkedList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,91 +35,98 @@ public class IOPlayer implements Runnable {
 
     private String streamName;
     private Process process;
-    private OutputStreamWriter inputStream;
-    private InputStreamGobbler outputGobbler;
-    private InputStreamGobbler errorGobbler;
-    private StringBuilder dump;
+    private OutputStreamWriter outputStream;
+    private InputStreamGobbler processStdOutGobbler;
+    private InputStreamGobbler processStdErrGobbler;
+
+    private Logger communicationLogger;
+    private List<String> errorLog;
+    private List<String> communicationLog;
+
     private int errorCounter;
     private boolean finished;
     private final int maxErrors = 2;
 
-    public String response;
+    // the last unprocessed line received form the bot. Is replaced by a new line whenever a
+    // new line is recieved. Is also reset to null every time the data is consumed
+    private String response;
 
-    public IOPlayer(Process process, String streamName) {
+    public IOPlayer(Process process, String streamName, Logger communicationLogger) {
         this.streamName = streamName;
-        this.inputStream = new OutputStreamWriter(process.getOutputStream());
-    	this.outputGobbler = new InputStreamGobbler(process.getInputStream(), this, "output");
-    	this.errorGobbler = new InputStreamGobbler(process.getErrorStream(), this, "error");
         this.process = process;
-        this.dump = new StringBuilder();
+        this.communicationLogger = communicationLogger;
+
+        // send data to the process stdin
+        this.outputStream = new OutputStreamWriter(process.getOutputStream());
+
+        // get responses from the process's stdout
+        this.processStdOutGobbler = new InputStreamGobbler(process.getInputStream(), this::recordInputFromProcess);
+
+        // record data from the process's stderr, but ignore it
+        this.processStdErrGobbler = new InputStreamGobbler(process.getErrorStream(), null);
+
+        this.communicationLog = new LinkedList<>();
+        this.errorLog = new LinkedList<>();
         this.errorCounter = 0;
+
         this.finished = false;
     }
 
+    public synchronized void recordInputFromProcess(String data) {
+        this.response = data;
+    }
+
     // processes a line by reading it or writing it
-    public void process(String line, String type) throws IOException {
+    public void sendToPlayer(String line) throws IOException {
         if (!this.finished) {
-        	switch (type) {
-        	case "input":
-                System.out.format("-> [%s] '%s'\n", this.streamName, line);
-                try {
-            		this.inputStream.write(line + "\n");
-            		this.inputStream.flush();
-                } catch(IOException e) {
-                    System.err.println("Writing to bot failed");
-                }
-                addToDump(line + "\n");
-        		break;
-        	case "output":
-    //    		System.out.println("out: " + line);
-        		break;
-        	case "error":
-    //    		System.out.println("error: " + line);
-        		break;
-        	}
+            logCommunication("->", line);
+            try {
+                this.outputStream.write(line + "\n");
+                this.outputStream.flush();
+            } catch(IOException e) {
+                this.errorLog.add("Writing to bot failed");
+                logCommunication("!!", "Writing to bot failed");
+            }
         }
     }
 
     // waits for a response from the bot
     public String getResponse(long timeOut) {
-    	long timeStart = System.currentTimeMillis();
-    	String response;
+        if (this.errorCounter > this.maxErrors) {
+            logCommunication("<-", "<skipping player - too many errors>");
+            return "";
+        }
 
-    	if (this.errorCounter > this.maxErrors) {
-    		addToDump("Maximum number (" + this.maxErrors + ") of time-outs reached: skipping all moves.\n");
-    		return "";
-    	}
+        long timeStart = System.currentTimeMillis();
 
-    	while(this.response == null) {
-    		long timeNow = System.currentTimeMillis();
-			long timeElapsed = timeNow - timeStart;
+        while(this.response == null) {
+            long timeNow = System.currentTimeMillis();
+            long timeElapsed = timeNow - timeStart;
 
-			if(timeElapsed >= timeOut) {
-				addToDump("Response timed out (" + timeOut + "ms), let your bot return 'No moves' instead of nothing or make it faster.\n");
-				this.errorCounter++;
+            if(timeOut > 0 && timeElapsed >= timeOut) {
+                logCommunication("<-", "<timeout>");
+                errorLog.add("Response timed out after " + timeOut + "ms (return 'No moves' instead of nothing or play faster)");
+
+                this.errorCounter++;
                 if (this.errorCounter > this.maxErrors) {
+                    errorLog.add("Maximum number (" + this.maxErrors + ") of time-outs reached: skipping all moves.");
                     finish();
                 }
-                System.out.format("<- [%s] '%s'\n", this.streamName, "<timeout>");
-                addToDump("Output from your bot: null");
-				return "";
-			}
+                return "";
+            }
 
-			try { Thread.sleep(2); } catch (InterruptedException e) {}
-    	}
-		if(this.response.equalsIgnoreCase("No moves")) {
-			this.response = null;
-			System.out.format("<- [%s] '%s'\n", this.streamName, "<no moves>");
-            addToDump("Output from your bot: \"No moves\"\n");
-			return "";
-		}
+            try { Thread.sleep(2); } catch (InterruptedException e) {}
+        }
 
-		response = this.response;
-		this.response = null;
+        String lastResponse = this.response;
+        this.response = null;
 
-		System.out.format("<- [%s] '%s'\n", this.streamName, response);
-		addToDump("Output from your bot: \"" + response + "\"\n");
-		return response;
+        if(lastResponse.equalsIgnoreCase("No moves")) {
+            logCommunication("<-",  "<no moves>");
+            return "";
+        }
+        logCommunication("<-", lastResponse);
+        return lastResponse;
     }
 
     // ends the bot process and it's communication
@@ -127,15 +136,15 @@ public class IOPlayer implements Runnable {
             return;
 
     	try {
-            this.inputStream.close();
+            this.outputStream.close();
         } catch (IOException e) {}
 
-    	this.process.destroy();
-    	try {
-    		this.process.waitFor();
-    	} catch (InterruptedException ex) {
-    		Logger.getLogger(IOPlayer.class.getName()).log(Level.SEVERE, null, ex);
-    	}
+        this.process.destroy();
+        try {
+            this.process.waitFor();
+        } catch (InterruptedException ex) {
+            Logger.getLogger(IOPlayer.class.getName()).log(Level.SEVERE, null, ex);
+        }
 
         this.finished = true;
     }
@@ -144,26 +153,34 @@ public class IOPlayer implements Runnable {
         return this.process;
     }
 
-    public void addToDump(String dumpy){
-		dump.append(dumpy);
-	}
-
     public String getStdout() {
-    	return this.outputGobbler.getData();
+        return this.processStdOutGobbler.getData();
     }
 
     public String getStderr() {
-    	return this.errorGobbler.getData();
+        return this.processStdErrGobbler.getData();
     }
 
-    public String getDump() {
-    	return dump.toString();
+    public List<String> getErrorLog() {
+        return this.errorLog;
+    }
+
+    public List<String> getCommunicationLog() {
+        return this.communicationLog;
+    }
+
+    private void logCommunication(String type, String message) {
+        String logMessage = String.format("%s [%s] '%s'\n", type, this.streamName, message);
+        communicationLog.add(logMessage);
+        if (communicationLogger != null) {
+            communicationLogger.info(logMessage);
+        }
     }
 
     @Override
     // start communication with the bot
     public void run() {
-        this.outputGobbler.start();
-        this.errorGobbler.start();
+        this.processStdOutGobbler.start();
+        this.processStdErrGobbler.start();
     }
 }

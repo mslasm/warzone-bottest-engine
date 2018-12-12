@@ -21,6 +21,11 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.Scanner;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Formatter;
 
 import java.lang.Thread;
 
@@ -128,9 +133,6 @@ public class Warlight2 implements Logic
     public void playRound(int roundNumber) {
         System.out.println("------ Playing round #" + roundNumber + " ------");
 
-        player1.getBot().addToDump(String.format("Round %d\n", roundNumber));
-        player2.getBot().addToDump(String.format("Round %d\n", roundNumber));
-
         this.processor.playRound(roundNumber);
     }
 
@@ -212,6 +214,25 @@ public class Warlight2 implements Logic
         // do stuff here if you want to save results
     }
 
+    private static Logger getPlainConsoleLogger(String loggerName, String customStaticPrefix) {
+        Logger log = Logger.getLogger(loggerName);
+        log.setLevel(Level.ALL);
+        ConsoleHandler handler = new ConsoleHandler();
+        handler.setFormatter(new Formatter() {
+            @Override
+            public String format(LogRecord lr) {
+                StringBuilder builder = new StringBuilder(customStaticPrefix.length() + 2 + lr.getMessage().length());
+                builder.append(customStaticPrefix);
+                builder.append(" ");
+                builder.append(lr.getMessage());
+                return builder.toString();
+            }
+        });
+        log.setUseParentHandlers(false);
+        log.addHandler(handler);
+        return log;
+    }
+
     /**
      * main
      *
@@ -231,8 +252,11 @@ public class Warlight2 implements Logic
         String bot1Name = "player1";
         String bot2Name = "player2";
 
+        // setup bot communication logging
+        Logger botCommunicationLogger = getPlainConsoleLogger("bot.comunication.logger", "COMM");
+
         // Construct engine
-        Engine engine = new Engine();
+        Engine engine = new Engine(botCommunicationLogger);
 
         // Set logic
         engine.setLogic(new Warlight2(gameID, randomMapSeed, randomGameSeed, mapFile, settingsFile, bot1Name, bot2Name));
